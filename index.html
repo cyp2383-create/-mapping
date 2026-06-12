@@ -31,37 +31,41 @@ body {
 .map-layer::before {
   content: ''; position: absolute; inset: -20%;
   background-image:
-    radial-gradient(circle 3px at 10% 20%, rgba(245,158,11,.9), transparent 30px),
-    radial-gradient(circle 2px at 20% 45%, rgba(251,191,36,.7), transparent 30px),
-    radial-gradient(circle 4px at 15% 70%, rgba(245,158,11,.8), transparent 40px),
-    radial-gradient(circle 2px at 25% 15%, rgba(251,191,36,.6), transparent 30px),
-    radial-gradient(circle 3px at 30% 55%, rgba(245,158,11,.85), transparent 40px),
-    radial-gradient(circle 4px at 40% 10%, rgba(245,158,11,.8), transparent 50px),
-    radial-gradient(circle 2px at 45% 60%, rgba(251,191,36,.7), transparent 30px),
-    radial-gradient(circle 5px at 50% 35%, rgba(251,191,36,1), transparent 60px),
-    radial-gradient(circle 3px at 60% 20%, rgba(245,158,11,.85), transparent 40px),
-    radial-gradient(circle 2px at 65% 55%, rgba(251,191,36,.7), transparent 30px),
-    radial-gradient(circle 3px at 75% 15%, rgba(251,191,36,.9), transparent 50px),
-    radial-gradient(circle 2px at 80% 65%, rgba(245,158,11,.7), transparent 30px),
-    radial-gradient(circle 4px at 85% 40%, rgba(251,191,36,.85), transparent 50px),
-    radial-gradient(circle 3px at 95% 10%, rgba(245,158,11,.8), transparent 40px),
-    radial-gradient(circle 2px at 5% 35%, rgba(251,191,36,.7), transparent 30px),
-    radial-gradient(circle 4px at 28% 25%, rgba(251,191,36,.9), transparent 50px),
-    radial-gradient(circle 3px at 48% 5%, rgba(245,158,11,.85), transparent 40px),
-    radial-gradient(circle 2px at 58% 45%, rgba(251,191,36,.7), transparent 30px),
-    radial-gradient(circle 4px at 68% 30%, rgba(245,158,11,.9), transparent 50px),
-    radial-gradient(circle 3px at 88% 50%, rgba(251,191,36,.85), transparent 40px),
-    radial-gradient(circle 5px at 52% 28%, rgba(245,158,11,1), transparent 70px),
-    radial-gradient(circle 3px at 32% 50%, rgba(251,191,36,.85), transparent 40px),
-    radial-gradient(circle 3px at 72% 58%, rgba(245,158,11,.8), transparent 40px);
+    radial-gradient(circle 1px at 10% 20%, rgba(245,158,11,.7), transparent 20px),
+    radial-gradient(circle 1px at 20% 45%, rgba(251,191,36,.5), transparent 15px),
+    radial-gradient(circle 1px at 15% 70%, rgba(245,158,11,.6), transparent 20px),
+    radial-gradient(circle 1px at 25% 15%, rgba(251,191,36,.5), transparent 15px),
+    radial-gradient(circle 2px at 30% 55%, rgba(245,158,11,.6), transparent 25px),
+    radial-gradient(circle 1px at 35% 85%, rgba(217,119,6,.4), transparent 15px),
+    radial-gradient(circle 2px at 40% 10%, rgba(245,158,11,.6), transparent 30px),
+    radial-gradient(circle 1px at 45% 60%, rgba(251,191,36,.5), transparent 15px),
+    radial-gradient(circle 2px at 50% 35%, rgba(251,191,36,.7), transparent 30px),
+    radial-gradient(circle 1px at 55% 80%, rgba(217,119,6,.4), transparent 15px),
+    radial-gradient(circle 2px at 60% 20%, rgba(245,158,11,.6), transparent 25px),
+    radial-gradient(circle 1px at 65% 55%, rgba(251,191,36,.5), transparent 15px),
+    radial-gradient(circle 1px at 70% 90%, rgba(217,119,6,.4), transparent 15px),
+    radial-gradient(circle 2px at 75% 15%, rgba(251,191,36,.6), transparent 30px),
+    radial-gradient(circle 1px at 80% 65%, rgba(245,158,11,.5), transparent 15px),
+    radial-gradient(circle 2px at 85% 40%, rgba(251,191,36,.6), transparent 30px),
+    radial-gradient(circle 1px at 90% 75%, rgba(217,119,6,.4), transparent 15px),
+    radial-gradient(circle 1px at 95% 10%, rgba(245,158,11,.6), transparent 20px),
+    radial-gradient(circle 1px at 5% 35%, rgba(251,191,36,.5), transparent 15px),
+    radial-gradient(circle 1px at 18% 85%, rgba(217,119,6,.4), transparent 15px),
+    radial-gradient(circle 2px at 28% 25%, rgba(251,191,36,.6), transparent 30px),
+    radial-gradient(circle 1px at 38% 95%, rgba(217,119,6,.3), transparent 15px),
+    radial-gradient(circle 1px at 48% 5%, rgba(245,158,11,.6), transparent 20px),
+    radial-gradient(circle 1px at 58% 45%, rgba(251,191,36,.5), transparent 15px),
+    radial-gradient(circle 2px at 68% 30%, rgba(245,158,11,.7), transparent 25px),
+    radial-gradient(circle 1px at 78% 70%, rgba(217,119,6,.4), transparent 15px),
+    radial-gradient(circle 1px at 88% 50%, rgba(251,191,36,.6), transparent 20px),
+    radial-gradient(circle 1px at 12% 90%, rgba(217,119,6,.4), transparent 15px),
+    radial-gradient(circle 1px at 42% 70%, rgba(251,191,36,.5), transparent 20px),
+    radial-gradient(circle 2px at 52% 28%, rgba(245,158,11,.7), transparent 35px),
+    radial-gradient(circle 1px at 32% 50%, rgba(251,191,36,.6), transparent 20px),
+    radial-gradient(circle 2px at 72% 58%, rgba(245,158,11,.6), transparent 25px);
   background-size: 100% 100%;
-  filter: blur(2px) brightness(1);
-  animation: mapDrift 20s ease-in-out infinite;
-}
-@keyframes mapDrift {
-  0%   { transform: scale(1.15); }
-  50%  { transform: scale(1.2); }
-  100% { transform: scale(1.15); }
+  filter: blur(1px);
+  transform: scale(1.15);
 }
 /* Vignette overlay */
 .map-layer::after {
