@@ -1,14 +1,10 @@
 {
-  "buildCommand": "",
-  "outputDirectory": ".",
-  "installCommand": "",
-  "functions": {
-    "api/generate.js": { "maxDuration": 60 },
-    "api/data.js": { "maxDuration": 10 },
-    "api/chat.js": { "maxDuration": 30 }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+  "version": 2,
+  "builds": [
+    { "src": "api/*.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
