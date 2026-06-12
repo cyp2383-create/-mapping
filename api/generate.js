@@ -1,31 +1,35 @@
 /** POST /api/generate — 全流程人才地图生成 */
 export default async function handler(req, res) {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin','*');
+  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({error:'POST only'});
 
-  const { industry, role, city } = req.body;
-  if (!industry || !role) return res.status(400).json({error:'Need industry and role'});
+  try {
+    const { industry, role, city } = req.body;
+    if (!industry || !role) return res.status(400).json({error:'Need industry and role'});
 
-  const deepseek = createDeepSeek();
-  const tavily = createTavily();
+    const deepseek = createDeepSeek();
+    const tavily = createTavily();
 
-  // Step 1: Generate target companies
-  const companies = await generateCompanies(deepseek, industry, role);
-  // Step 2: Search JDs (parallel)
-  const jds = await searchJDs(tavily, companies, role);
-  // Step 3: Search LinkedIn (parallel, sample 8 companies)
-  const talents = await searchLinkedIn(tavily, companies.slice(0,8), role);
-  // Step 4: Generate report
-  const reportHtml = await generateReport(deepseek, talents, jds, industry, role);
+    await initTables();
 
-  // Step 5: Store in Turso
-  await storeResults(industry, role, talents, jds);
+    const companies = await generateCompanies(deepseek, industry, role);
+    const jds = await searchJDs(tavily, companies, role);
+    const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
+    const reportHtml = await generateReport(deepseek, talents, jds, industry, role);
 
-  res.json({
-    talents: talents.slice(0, 30),
-    jds: jds.slice(0, 30),
-    report_html: reportHtml,
-    companies: companies.slice(0, 10).map(c => c.name),
-  });
+    await storeResults(industry, role, talents, jds);
+
+    res.json({
+      talents: talents.slice(0, 30),
+      jds: jds.slice(0, 30),
+      report_html: reportHtml,
+      companies: companies.slice(0, 10).map(c => c.name),
+    });
+  } catch(e) {
+    res.status(500).json({error: e.message, stack: e.stack});
+  }
 }
 
 // ========== API Clients ==========
@@ -107,7 +111,56 @@ async function generateReport(ai, talents, jds, industry, role) {
   return t;
 }
 
+function turso() {
+  return {
+    execute: async (sql, params=[]) => {
+      const resp = await fetch(process.env.TURSO_URL + '/v2/pipeline', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + process.env.TURSO_TOKEN,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [{ type: 'execute', stmt: { sql, params: params.map(String) } }]
+        })
+      });
+      const d = await resp.json();
+      const r = d.results?.[0]?.response?.result;
+      return { rows: r?.rows || [], lastInsertId: r?.last_insert_rowid };
+    }
+  };
+}
+
+async function initTables() {
+  const db = turso();
+  await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, created_at TEXT DEFAULT (datetime()))");
+  await db.execute("CREATE TABLE IF NOT EXISTS talents (id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER, name TEXT, current_company TEXT, current_title TEXT, city TEXT, skills TEXT, source_platform TEXT, source_url TEXT, confidence REAL DEFAULT 0.5)");
+  await db.execute("CREATE TABLE IF NOT EXISTS jds (id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER, title TEXT, company TEXT, salary TEXT, location TEXT, experience TEXT, education TEXT, skills TEXT, source_platform TEXT, source_url TEXT)");
+}
+
 async function storeResults(industry, role, talents, jds) {
-  // Turso storage placeholder — will be implemented after Turso setup
-  console.log(`Storing: ${talents.length} talents, ${jds.length} JDs for ${role} in ${industry}`);
+  const db = turso();
+  // Create position
+  await db.execute(
+    "INSERT INTO positions (name, industry, role_direction) VALUES (?,?,?)",
+    [role + '-' + industry, industry, role]
+  );
+  const pos = await db.execute("SELECT last_insert_rowid() as id");
+  const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
+
+  // Store talents
+  for (const t of talents.slice(0, 30)) {
+    await db.execute(
+      "INSERT INTO talents (position_id, name, current_title, current_company, city, skills, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?,?,?)",
+      [pid, t.name||'', t.title||'', t.company||'', t.city||'', '[]', 'linkedin', t.url||'', 0.85]
+    );
+  }
+  // Store JDs
+  for (const j of jds.slice(0, 30)) {
+    await db.execute(
+      "INSERT INTO jds (position_id, title, company, salary, location, experience, source_platform, source_url) VALUES (?,?,?,?,?,?,?,?)",
+      [pid, j.title||'', j.company||'', '', '', '', 'websearch', j.url||'']
+    );
+  }
+  console.log(`Stored: ${talents.length} talents, ${jds.length} JDs for position ${pid}`);
 }
