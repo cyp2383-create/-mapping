@@ -1,8 +1,0 @@
-{
-  "name": "talent-mapper",
-  "version": "1.0.0",
-  "description": "AI Talent Mapping Tool",
-  "dependencies": {
-    "dotenv": "^16.0.0"
-  }
-}
