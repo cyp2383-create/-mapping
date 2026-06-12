@@ -17,3 +17,5 @@ data/exports/*
 # IDE
 .vscode/
 .idea/
+
+.vercel
