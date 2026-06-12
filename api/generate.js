@@ -147,6 +147,7 @@ async function generateReport(ai, talents, jds, industry, role) {
 function turso() {
   return {
     execute: async (sql, params=[]) => {
+      const formatted = params.map(p => ({ type: 'text', value: String(p ?? '') }));
       const resp = await fetch(process.env.TURSO_URL + '/v2/pipeline', {
         method: 'POST',
         headers: {
@@ -154,7 +155,7 @@ function turso() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          requests: [{ type: 'execute', stmt: { sql, params: params.map(String) } }]
+          requests: [{ type: 'execute', stmt: { sql, params: formatted } }]
         })
       });
       const d = await resp.json();
