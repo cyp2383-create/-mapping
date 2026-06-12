@@ -51,22 +51,11 @@ export default async function handler(req, res) {
       source_url: j.url || ''
     }));
 
-    // Check storage status
-    const db = turso();
-    const checkPos = await db.execute("SELECT COUNT(*) as n FROM positions");
-    const checkTal = await db.execute("SELECT COUNT(*) as n FROM talents");
-    const checkJd = await db.execute("SELECT COUNT(*) as n FROM jds");
-
     res.json({
       talents: talentRows,
       jds: jdRows,
       report_html: reportHtml,
       companies: companies.slice(0, 10).map(c => c.name),
-      _debug: {
-        positions: checkPos.rows?.[0]?.[0]?.value,
-        talents_count: checkTal.rows?.[0]?.[0]?.value,
-        jds_count: checkJd.rows?.[0]?.[0]?.value
-      }
     });
   } catch(e) {
     res.status(500).json({error: e.message, stack: e.stack});
@@ -184,45 +173,31 @@ async function initTables() {
 
 async function storeResults(industry, role, talents, jds) {
   const db = turso();
-  try {
-    // Create position
-    const ins = await db.execute(
-      "INSERT INTO positions (name, industry, role_direction) VALUES (?,?,?)",
-      [role + '-' + industry, industry, role]
+  // Create position
+  await db.execute(
+    "INSERT INTO positions (name, industry, role_direction) VALUES (?,?,?)",
+    [role + '-' + industry, industry, role]
+  );
+  const pos = await db.execute("SELECT last_insert_rowid() as id");
+  const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
+
+  // Store talents
+  for (const t of talents.slice(0, 30)) {
+    const raw = t.title || '';
+    const parts = raw.split(' - ').map(s => s.trim());
+    const name = (parts[0] || raw).substring(0,50);
+    const current_title = (parts[1] || '').substring(0,100);
+    const current_company = (t.company || parts[2] || '').substring(0,100);
+    await db.execute(
+      "INSERT INTO talents (position_id, name, current_title, current_company, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?)",
+      [pid, name, current_title, current_company, 'linkedin', t.url||'', 0.8]
     );
-    console.log('Position insert result:', JSON.stringify(ins));
-
-    const pos = await db.execute("SELECT last_insert_rowid() as id");
-    const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
-    console.log('Position ID:', pid);
-
-    // Store first talent as test
-    if (talents.length > 0) {
-      const t = talents[0];
-      const raw = t.title || '';
-      const parts = raw.split(' - ').map(s => s.trim());
-      const name = (parts[0] || raw).substring(0,50);
-      const current_title = (parts[1] || '').substring(0,100);
-      const current_company = (t.company || parts[2] || '').substring(0,100);
-      const result = await db.execute(
-        "INSERT INTO talents (position_id, name, current_title, current_company, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?)",
-        [pid, name, current_title, current_company, 'linkedin', t.url||'', 0.8]
-      );
-      console.log('Talent insert result:', JSON.stringify(result));
-    }
-
-    // Store first JD as test
-    if (jds.length > 0) {
-      const j = jds[0];
-      const result = await db.execute(
-        "INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES (?,?,?,?,?)",
-        [pid, (j.title||'').substring(0,100), (j.company||'').substring(0,100), 'websearch', j.url||'']
-      );
-      console.log('JD insert result:', JSON.stringify(result));
-    }
-
-    console.log(`Stored: 1 test talent + 1 test JD for position ${pid}`);
-  } catch(e) {
-    console.log('storeResults error:', e.message, e.stack);
+  }
+  // Store JDs
+  for (const j of jds.slice(0, 30)) {
+    await db.execute(
+      "INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES (?,?,?,?,?)",
+      [pid, (j.title||'').substring(0,100), (j.company||'').substring(0,100), 'websearch', j.url||'']
+    );
   }
 }
