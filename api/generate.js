@@ -17,9 +17,11 @@ export default async function handler(req, res) {
     const companies = await generateCompanies(deepseek, industry, role);
     const jds = await searchJDs(tavily, companies, role);
     const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
-    const reportHtml = await generateReport(deepseek, talents, jds, industry, role);
 
+    // Store FIRST (before slow report generation)
     await storeResults(industry, role, talents, jds);
+
+    const reportHtml = await generateReport(deepseek, talents, jds, industry, role);
 
     // Transform to frontend-friendly format
     const talentRows = talents.slice(0, 30).map(t => {
