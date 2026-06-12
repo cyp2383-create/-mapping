@@ -292,19 +292,22 @@ async function sendChat(){
 }
 
 async function loadHistory(){
+  const el=document.getElementById('historyList');
   try{
-    const resp=await fetch('/api/data?list=true'); const d=await resp.json();
-    const el=document.getElementById('historyList');
+    const resp=await fetch('/api/data?list=true');
+    if(!resp.ok) throw new Error('API error');
+    const d=await resp.json();
     const positions=d.positions||[];
     if(!positions.length){ el.innerHTML='<div class="empty">暂无历史报告</div>'; return; }
     el.innerHTML=positions.map(p=>`<div class="history-item"><div><span style="font-weight:600">${p.name||'#'+p.id}</span><span class="history-meta" style="margin-left:8px">${p.industry||''}</span></div><button class="btn btn-ghost" onclick="loadPosition(${p.id})">查看</button></div>`).join('');
-  }catch(e){}
+  }catch(e){ el.innerHTML='<div class="empty">暂无历史报告</div>'; }
 }
 
 async function loadPosition(id){
   const resp=await fetch('/api/data?position_id='+id); const data=await resp.json();
   currentData=data; showResults(data); document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
+loadHistory();
 </script>
 </body>
 </html>
