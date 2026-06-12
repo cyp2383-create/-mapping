@@ -5,11 +5,17 @@ export default async function handler(req, res) {
   const { position_id, list } = req.query;
 
   async function query(sql, params=[]) {
-    const formatted = params.map(p => ({ type: 'text', value: String(p ?? '') }));
+    let idx = 0;
+    const escaped = sql.replace(/\?/g, () => {
+      const v = params[idx++];
+      if (v === null || v === undefined) return 'NULL';
+      if (typeof v === 'number') return String(v);
+      return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";
+    });
     const resp = await fetch(process.env.TURSO_URL + '/v2/pipeline', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + process.env.TURSO_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql, params: formatted } }] })
+      body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql: escaped } }] })
     });
     const d = await resp.json();
     const r = d.results?.[0]?.response?.result;
