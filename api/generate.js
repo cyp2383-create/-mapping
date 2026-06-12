@@ -51,11 +51,22 @@ export default async function handler(req, res) {
       source_url: j.url || ''
     }));
 
+    // Check storage status
+    const db = turso();
+    const checkPos = await db.execute("SELECT COUNT(*) as n FROM positions");
+    const checkTal = await db.execute("SELECT COUNT(*) as n FROM talents");
+    const checkJd = await db.execute("SELECT COUNT(*) as n FROM jds");
+
     res.json({
       talents: talentRows,
       jds: jdRows,
       report_html: reportHtml,
       companies: companies.slice(0, 10).map(c => c.name),
+      _debug: {
+        positions: checkPos.rows?.[0]?.[0]?.value,
+        talents_count: checkTal.rows?.[0]?.[0]?.value,
+        jds_count: checkJd.rows?.[0]?.[0]?.value
+      }
     });
   } catch(e) {
     res.status(500).json({error: e.message, stack: e.stack});
