@@ -51,9 +51,13 @@ export default async function handler(req, res) {
     });
     const jdRows=jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',salary:j.salary||'',location:'',experience:'',skills:'',source_platform:'websearch',source_url:j.url||''}));
 
+    // Generate suggested follow-up questions
+    const questions = await generateQuestions(deepseek, talentRows, jdRows, industry, role);
+
     send({step:'done',progress:100,
       talents:talentRows,jds:jdRows,report_html:reportHtml,
-      companies:companies.slice(0,10).map(c=>c.name)});
+      companies:companies.slice(0,10).map(c=>c.name),
+      questions:questions});
     res.end();
   } catch(e) {
     send({step:'error',text:e.message});
@@ -107,8 +111,9 @@ async function generateCompanies(ai, industry, role) {
 async function searchJDs(tav, companies, role) {
   const jds = [];
   const batch = companies.slice(0, 10);
+  const now = new Date().getFullYear();
   const promises = batch.map(async c => {
-    const results = await tav.search(`${c.name} ${role} 招聘 岗位职责 任职要求`, 3);
+    const results = await tav.search(`${c.name} ${role} 招聘 ${now}`, 3);
     return results.map(r => ({...r, company:c.name}));
   });
   const all = await Promise.all(promises);
@@ -127,6 +132,19 @@ async function searchLinkedIn(tav, companies, role) {
   const all = await Promise.all(promises);
   all.forEach(arr => people.push(...arr));
   return people.slice(0, 25);
+}
+
+async function generateQuestions(ai, talents, jds, industry, role) {
+  const prompt = `Based on this talent mapping report about ${role} in ${industry} (${talents.length} candidates, ${jds.length} JDs), suggest 4 concise follow-up questions a recruiter would ask.
+Questions should cover: salary details, specific skills, company comparisons, candidate backgrounds.
+Return as JSON array of strings, max 15 chars each. Example: ["薪资范围?","技术栈要求?","海外背景?"]`;
+  const text = await ai.chat(prompt, 300);
+  try {
+    let t = text.trim();
+    if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n');
+    if (t.endsWith('```')) t = t.slice(0,-3);
+    return JSON.parse(t);
+  } catch { return ["薪资水平?","核心技能?","行业分布?","经验要求?"]; }
 }
 
 async function generateReport(ai, talents, jds, industry, role) {

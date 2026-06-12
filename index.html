@@ -152,7 +152,10 @@ tr:hover td { background: var(--p-bg); }
     <button class="tab" onclick="switchTab('jds')">招聘JD</button>
     <button class="tab" onclick="switchTab('chat')">追问</button>
   </div>
-  <div class="tab-content active" id="tab-report"><div class="report-frame" id="reportContent"></div></div>
+  <div class="tab-content active" id="tab-report">
+    <div class="report-frame" id="reportContent"></div>
+    <div id="suggestedQuestions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"></div>
+  </div>
   <div class="tab-content" id="tab-talents">
     <div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>技能</th><th>联系</th><th>来源</th></tr></thead><tbody></tbody></table></div>
   </div>
@@ -244,6 +247,11 @@ function showResults(data){
     <div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>
   `;
   document.getElementById('reportContent').innerHTML=data.report_html||'<div class="empty">报告生成中...</div>';
+  // Suggested questions
+  const qDiv=document.getElementById('suggestedQuestions');
+  if(data.questions?.length){
+    qDiv.innerHTML='<span style="font-size:12px;color:var(--ts);margin-right:4px">追问建议:</span>'+data.questions.map(q=>`<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="askQuestion('${q}')">${q}</button>`).join('');
+  }else{qDiv.innerHTML='';}
   const tbody=document.querySelector('#talentTable tbody'); tbody.innerHTML='';
   (data.talents||[]).forEach(t=>{
     tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.skills||''}</td><td>${t.contact_type||''}</td><td><span class="badge badge-yellow">${t.source_platform||''}</span></td></tr>`;
@@ -262,6 +270,12 @@ function switchTab(tab){
   });
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
+}
+
+async function askQuestion(q){
+  document.getElementById('chatInput').value=q;
+  switchTab('chat');
+  sendChat();
 }
 
 async function sendChat(){
