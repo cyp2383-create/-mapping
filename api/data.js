@@ -16,10 +16,10 @@ export default async function handler(req, res) {
   }
 
   if (list) {
-    const { rows, cols } = await query("SELECT * FROM positions ORDER BY created_at DESC");
+    const { rows, cols } = await query("SELECT id, name, industry, role_direction, created_at FROM positions ORDER BY created_at DESC");
     const positions = rows.map(r => {
       const obj = {};
-      cols.forEach((c,i) => obj[c] = r[i].value);
+      cols.forEach((c,i) => { try { obj[c] = r[i]?.value; } catch {} });
       return obj;
     });
     res.json({ positions });
@@ -27,16 +27,16 @@ export default async function handler(req, res) {
   }
 
   if (position_id) {
-    const t = await query("SELECT * FROM talents WHERE position_id=? LIMIT 100", [position_id]);
-    const j = await query("SELECT * FROM jds WHERE position_id=? LIMIT 100", [position_id]);
-    const mapRows = (r, cols) => r.rows.map(row => {
+    const t = await query("SELECT id, name, current_title, current_company, city, skills, source_platform, source_url, confidence FROM talents WHERE position_id=? LIMIT 100", [position_id]);
+    const j = await query("SELECT id, title, company, salary, location, experience, source_platform, source_url FROM jds WHERE position_id=? LIMIT 100", [position_id]);
+    const mapRows = (rows, cols) => rows.map(row => {
       const obj = {};
-      cols.forEach((c,i) => { obj[c] = row[i]?.value; });
+      cols.forEach((c,i) => { try { obj[c] = row[i]?.value; } catch {} });
       return obj;
     });
     res.json({
-      talents: mapRows(t, t.cols),
-      jds: mapRows(j, j.cols)
+      talents: t.rows ? mapRows(t.rows, t.cols) : [],
+      jds: j.rows ? mapRows(j.rows, j.cols) : []
     });
     return;
   }

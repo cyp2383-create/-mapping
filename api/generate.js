@@ -148,18 +148,23 @@ async function storeResults(industry, role, talents, jds) {
   const pos = await db.execute("SELECT last_insert_rowid() as id");
   const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
 
-  // Store talents
+  // Store talents — raw search results, use snippet as source_profile
   for (const t of talents.slice(0, 30)) {
+    const name = t.title?.split('|')[0]?.trim() || t.title?.split('-')[0]?.trim() || '';
+    const title = t.title || '';
+    const company = t.company || '';
     await db.execute(
-      "INSERT INTO talents (position_id, name, current_title, current_company, city, skills, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?,?,?)",
-      [pid, t.name||'', t.title||'', t.company||'', t.city||'', '[]', 'linkedin', t.url||'', 0.85]
+      "INSERT INTO talents (position_id, name, current_title, current_company, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?)",
+      [pid, name.substring(0,50), title.substring(0,100), company.substring(0,100), 'linkedin', t.url||'', 0.8]
     );
   }
   // Store JDs
   for (const j of jds.slice(0, 30)) {
+    const title = j.title || '';
+    const company = j.company || '';
     await db.execute(
-      "INSERT INTO jds (position_id, title, company, salary, location, experience, source_platform, source_url) VALUES (?,?,?,?,?,?,?,?)",
-      [pid, j.title||'', j.company||'', '', '', '', 'websearch', j.url||'']
+      "INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES (?,?,?,?,?)",
+      [pid, title.substring(0,100), company.substring(0,100), 'websearch', j.url||'']
     );
   }
   console.log(`Stored: ${talents.length} talents, ${jds.length} JDs for position ${pid}`);
