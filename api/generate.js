@@ -1,64 +1,63 @@
-/** POST /api/generate — 全流程人才地图生成 */
+/** POST /api/generate — 全流程人才地图生成 (SSE streaming) */
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin','*');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({error:'POST only'});
 
-  try {
-    const { industry, role, city } = req.body;
-    if (!industry || !role) return res.status(400).json({error:'Need industry and role'});
+  const { industry, role, city } = req.body;
+  if (!industry || !role) return res.status(400).json({error:'Need industry and role'});
 
+  // SSE response
+  res.setHeader('Content-Type','text/event-stream');
+  res.setHeader('Cache-Control','no-cache');
+  res.setHeader('Connection','keep-alive');
+  res.setHeader('X-Accel-Buffering','no');
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
     const deepseek = createDeepSeek();
     const tavily = createTavily();
 
     await initTables();
 
+    // Step 1
+    send({step:'companies',text:'生成目标公司列表...',progress:10});
     const companies = await generateCompanies(deepseek, industry, role);
-    const jds = await searchJDs(tavily, companies, role);
-    const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
+    send({step:'companies',text:`已生成${companies.length}家公司`,progress:20,companies:companies.slice(0,10).map(c=>c.name)});
 
-    // Store FIRST (before slow report generation)
+    // Step 2
+    send({step:'jds',text:'搜索JD...',progress:25});
+    const jds = await searchJDs(tavily, companies, role);
+    send({step:'jds',text:`找到${jds.length}条JD`,progress:45});
+
+    // Step 3
+    send({step:'talents',text:'搜索候选人...',progress:50});
+    const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
+    send({step:'talents',text:`找到${talents.length}位候选人`,progress:70});
+
+    // Store
     await storeResults(industry, role, talents, jds);
 
+    // Step 4
+    send({step:'report',text:'生成报告中...',progress:75});
     const reportHtml = await generateReport(deepseek, talents, jds, industry, role);
+    send({step:'report',text:'报告完成',progress:95});
 
-    // Transform to frontend-friendly format
-    const talentRows = talents.slice(0, 30).map(t => {
-      const raw = t.title || '';
-      const parts = raw.split(' - ').map(s => s.trim());
-      return {
-        name: parts[0] || raw.substring(0,30),
-        current_title: parts[1] || '',
-        current_company: t.company || parts[2] || '',
-        city: '',
-        skills: '',
-        source_platform: 'linkedin',
-        source_url: t.url || '',
-        contact_type: t.url ? 'linkedin' : 'none',
-        contact_value: t.url || '',
-        confidence: 0.8
-      };
+    // Transform
+    const talentRows = talents.slice(0,30).map(t=>{
+      const raw=t.title||''; const parts=raw.split(' - ').map(s=>s.trim());
+      return {name:parts[0]||raw.substring(0,30),current_title:parts[1]||'',current_company:t.company||parts[2]||'',city:'',skills:'',source_platform:'linkedin',source_url:t.url||'',contact_type:t.url?'linkedin':'none',contact_value:t.url||'',confidence:.8};
     });
-    const jdRows = jds.slice(0, 30).map(j => ({
-      title: j.title || '',
-      company: j.company || '',
-      salary: j.salary || '',
-      location: '',
-      experience: '',
-      skills: '',
-      source_platform: 'websearch',
-      source_url: j.url || ''
-    }));
+    const jdRows=jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',salary:j.salary||'',location:'',experience:'',skills:'',source_platform:'websearch',source_url:j.url||''}));
 
-    res.json({
-      talents: talentRows,
-      jds: jdRows,
-      report_html: reportHtml,
-      companies: companies.slice(0, 10).map(c => c.name),
-    });
+    send({step:'done',progress:100,
+      talents:talentRows,jds:jdRows,report_html:reportHtml,
+      companies:companies.slice(0,10).map(c=>c.name)});
+    res.end();
   } catch(e) {
-    res.status(500).json({error: e.message, stack: e.stack});
+    send({step:'error',text:e.message});
+    res.end();
   }
 }
 
