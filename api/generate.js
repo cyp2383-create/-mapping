@@ -147,15 +147,13 @@ async function generateReport(ai, talents, jds, industry, role) {
 function turso() {
   return {
     execute: async (sql, params=[]) => {
-      // Turso pipeline API: params via ? placeholders not supported
-      // Workaround: embed escaped values directly in SQL
+      // Turso pipeline API: params via ? placeholder not supported. Embed escaped values.
       let idx = 0;
       const escaped = sql.replace(/\?/g, () => {
         const v = params[idx++];
         if (v === null || v === undefined) return 'NULL';
         if (typeof v === 'number') return String(v);
-        // Escape single quotes
-        return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";
+        return "'" + String(v).replace(/'/g, "''") + "'";
       });
       const resp = await fetch(process.env.TURSO_URL + '/v2/pipeline', {
         method: 'POST',

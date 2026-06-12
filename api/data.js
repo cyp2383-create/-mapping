@@ -10,7 +10,7 @@ export default async function handler(req, res) {
       const v = params[idx++];
       if (v === null || v === undefined) return 'NULL';
       if (typeof v === 'number') return String(v);
-      return \"'\" + String(v).replace(/'/g, \"''\") + \"'\";
+      return "'" + String(v).replace(/'/g, "''") + "'";
     });
     const resp = await fetch(process.env.TURSO_URL + '/v2/pipeline', {
       method: 'POST',
