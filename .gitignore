@@ -1,0 +1,19 @@
+# Secrets
+.env
+*.db
+cookies/
+__pycache__/
+*.pyc
+
+# Test files
+cookies/*.txt
+cookies/*.json
+cookies/*.png
+
+# Data exports
+data/exports/*
+!data/exports/.gitkeep
+
+# IDE
+.vscode/
+.idea/
