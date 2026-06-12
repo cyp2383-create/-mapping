@@ -1,5 +1,7 @@
 /** GET /api/data — 查询Turso数据库 */
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  try {
   const { position_id, list } = req.query;
 
   async function query(sql, params=[]) {
@@ -40,4 +42,5 @@ export default async function handler(req, res) {
   }
 
   res.json({ error: 'Need position_id or list' });
+  } catch(e) { res.status(500).json({error:e.message}); }
 }
