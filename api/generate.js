@@ -21,9 +21,37 @@ export default async function handler(req, res) {
 
     await storeResults(industry, role, talents, jds);
 
+    // Transform to frontend-friendly format
+    const talentRows = talents.slice(0, 30).map(t => {
+      const raw = t.title || '';
+      const parts = raw.split(' - ').map(s => s.trim());
+      return {
+        name: parts[0] || raw.substring(0,30),
+        current_title: parts[1] || '',
+        current_company: t.company || parts[2] || '',
+        city: '',
+        skills: '',
+        source_platform: 'linkedin',
+        source_url: t.url || '',
+        contact_type: t.url ? 'linkedin' : 'none',
+        contact_value: t.url || '',
+        confidence: 0.8
+      };
+    });
+    const jdRows = jds.slice(0, 30).map(j => ({
+      title: j.title || '',
+      company: j.company || '',
+      salary: j.salary || '',
+      location: '',
+      experience: '',
+      skills: '',
+      source_platform: 'websearch',
+      source_url: j.url || ''
+    }));
+
     res.json({
-      talents: talents.slice(0, 30),
-      jds: jds.slice(0, 30),
+      talents: talentRows,
+      jds: jdRows,
       report_html: reportHtml,
       companies: companies.slice(0, 10).map(c => c.name),
     });
@@ -103,7 +131,10 @@ async function searchLinkedIn(tav, companies, role) {
 async function generateReport(ai, talents, jds, industry, role) {
   const talentText = talents.slice(0,15).map(t=>`${t.snippet||''}`).join('\n');
   const jdText = jds.slice(0,10).map(j=>`${j.snippet||''}`).join('\n');
-  const prompt = `Based on ${talents.length} candidates and ${jds.length} JDs about ${role} in ${industry}, generate a concise HTML talent profile report. Sections: 1)Market demand - skills/exp/salary from JDs 2)Who are these people - from candidates. Mark [JD data]/[Candidate data]. Clean white HTML, body only. Candidates:${talentText.substring(0,4000)} JDs:${jdText.substring(0,4000)}`;
+  const prompt = `基于${talents.length}条候选人数据和${jds.length}条JD数据，为${industry}行业的${role}岗位生成一份HTML人才画像报告。
+板块: 1)市场需要怎样的人-硬技能/经验/学历/薪酬 2)这些都是什么人-公司/职位/背景。
+每条数据标注[JD数据]或[候选人数据]。白色背景，只输出body内容。
+候选人:${talentText.substring(0,4000)} JD:${jdText.substring(0,4000)}`;
   const html = await ai.chat(prompt, 4000);
   let t = html.trim();
   if (t.startsWith('```html')) t = t.split('\n').slice(1).join('\n');
@@ -148,14 +179,16 @@ async function storeResults(industry, role, talents, jds) {
   const pos = await db.execute("SELECT last_insert_rowid() as id");
   const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
 
-  // Store talents — raw search results, use snippet as source_profile
+  // Store talents — parse LinkedIn-style title "Name - Title - Company"
   for (const t of talents.slice(0, 30)) {
-    const name = t.title?.split('|')[0]?.trim() || t.title?.split('-')[0]?.trim() || '';
-    const title = t.title || '';
-    const company = t.company || '';
+    const raw = t.title || '';
+    const parts = raw.split(' - ').map(s => s.trim());
+    const name = parts[0] || raw.substring(0,30);
+    const current_title = parts[1] || '';
+    const current_company = t.company || parts[2] || '';
     await db.execute(
       "INSERT INTO talents (position_id, name, current_title, current_company, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?)",
-      [pid, name.substring(0,50), title.substring(0,100), company.substring(0,100), 'linkedin', t.url||'', 0.8]
+      [pid, name.substring(0,50), current_title.substring(0,100), current_company.substring(0,100), 'linkedin', t.url||'', 0.8]
     );
   }
   // Store JDs
