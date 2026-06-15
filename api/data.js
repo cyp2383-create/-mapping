@@ -41,6 +41,15 @@ export default async function handler(req, res) {
     let talents=[], jds=[];
     try { talents = JSON.parse(obj.talent_data||'[]'); } catch {}
     try { jds = JSON.parse(obj.jd_data||'[]'); } catch {}
+    // Convert raw Tavily format to parsed format if needed
+    talents = talents.map(t => {
+      if (t.name !== undefined) return t; // Already parsed
+      const raw = t.title||'';
+      const parts = raw.split(' - ').map(s=>s.trim());
+      const urlMatch = (t.url||'').match(/linkedin\.com\/in\/([^/]+)/);
+      const name = parts[0] || (urlMatch ? urlMatch[1].replace(/-/g,' ').replace(/[0-9]/g,'').trim() : raw.substring(0,25));
+      return {name:name||raw.substring(0,25), current_title:parts[1]||'', current_company:t.company||parts[2]||'', source_platform:'linkedin', source_url:t.url||'', contact_type:t.url?'linkedin':'none', contact_value:t.url||''};
+    });
     res.json({ talents, jds, report_html:'', vp_summary:'' });
     return;
   }
