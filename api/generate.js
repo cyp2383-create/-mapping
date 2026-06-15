@@ -105,9 +105,9 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
   send({step:'talents',text:`找到${talents.length}位候选人`,progress:55});
 
-  send({step:'report',text:'生成宏观市场报告...',progress:60});
+  send({step:'report',text:'生成报告...',progress:60});
 
-  // Parse and classify
+  // Parse and classify talents
   const talentRows = talents.slice(0,40).map(t => {
     const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
     const name = parts[0]||raw.substring(0,30);
@@ -119,15 +119,17 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     };
   });
 
-  // Generate VP summary
-  const vpSummary = await generateVPSummary(ai, talentRows, jds, industry, role);
-  // Generate full macro report
-  const reportHtml = await generateMacroHtml(ai, talentRows, jds, industry, role);
-  // Generate follow-up questions
-  const questions = await generateQuestions(ai, talentRows, jds, industry, role);
-
-  // Store results
+  // Store results first (fast)
   await storeResults(industry, role, talents, jds);
+
+  // Generate reports in parallel with timeout
+  const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
+
+  const [vpSummary, reportHtml, questions] = await Promise.all([
+    reportTimeout(generateVPSummary(ai, talentRows, jds, industry, role), 20000),
+    reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 25000),
+    reportTimeout(generateQuestions(ai, talentRows, jds, industry, role), 10000),
+  ]);
 
   const highTier = talentRows.filter(t=>t.tier==='high');
   const midTier = talentRows.filter(t=>t.tier==='mid');
@@ -136,9 +138,9 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   send({step:'done',progress:100,
     talents:talentRows, jds:jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',
       source_platform:'websearch',source_url:j.url||''})),
-    report_html: reportHtml,
-    vp_summary: vpSummary,
-    questions: questions,
+    report_html: reportHtml || '<p>报告生成中，请稍后重试。数据已就绪。</p>',
+    vp_summary: vpSummary || '<p>摘要生成超时，请稍后重试。</p>',
+    questions: questions || ["招这个人要解决什么核心问题?","团队规模和汇报关系?","预算范围?"],
     tier_stats: {high:highTier.length, mid:midTier.length, low:lowTier.length},
     companies: companies.slice(0,15).map(c=>c.name),
     stage: 1
