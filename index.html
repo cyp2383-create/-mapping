@@ -264,7 +264,14 @@ tr:hover td { background: var(--surface-hover); }
     <div class="suggestions" id="suggestedQuestions"></div>
     <!-- Step 2: Structured follow-up -->
     <div id="step2Panel" style="margin-top:20px;padding:20px;background:rgba(255,255,255,.03);border-radius:var(--r-sm);border:1px solid var(--border);display:none">
-      <div style="font-size:14px;font-weight:600;margin-bottom:12px">定向候选人画像 · 请补充以下信息</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">定向候选人画像 · 快速追问</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='搭建0-1的AI产品团队';document.getElementById('ctx_team').value='带5人团队,汇报给CTO';document.getElementById('ctx_budget').value='年薪60-80W,P0紧急';generateStage2()">快速搭建AI团队</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='现有产品AI化升级';document.getElementById('ctx_team').value='独立贡献者或2-3人小组';document.getElementById('ctx_budget').value='年薪40-60W,P1';generateStage2()">产品AI化升级</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='替代离职的AI产品负责人';document.getElementById('ctx_team').value='接管10人团队';document.getElementById('ctx_budget').value='年薪80-120W,P0一周内';generateStage2()">紧急替补高管</button>
+        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='探索AI新业务方向';document.getElementById('ctx_team').value='从0开始搭建';document.getElementById('ctx_budget').value='年薪50-70W,P2';generateStage2()">探索新业务</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px">或手动填写：</div>
       <div style="display:grid;gap:12px">
         <div class="input-group"><label>招这个人要解决什么核心问题？</label><input id="ctx_problem" placeholder="例如: 搭建0-1的大模型产品团队"></div>
         <div class="input-group"><label>团队规模和汇报关系？</label><input id="ctx_team" placeholder="例如: 带5人团队, 直接汇报给CTO"></div>
