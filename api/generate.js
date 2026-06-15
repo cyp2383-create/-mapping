@@ -134,6 +134,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   });  // === PHASE 1: Return structured data immediately ===
   const highTier = talentRows.filter(t=>t.tier==='high');
   const midTier = talentRows.filter(t=>t.tier==='mid');
+  const lowTier = talentRows.filter(t=>t.tier==='low');
   const jdRows = jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',source_platform:'websearch',source_url:j.url||''}));
 
   send({step:'data_ready',progress:65,
