@@ -105,9 +105,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
   send({step:'talents',text:`找到${talents.length}位候选人`,progress:55});
 
-  send({step:'report',text:'生成报告...',progress:60});
-
-  // Parse and classify talents
+  // Parse and classify talents immediately
   const talentRows = talents.slice(0,40).map(t => {
     const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
     const name = parts[0]||raw.substring(0,30);
@@ -125,26 +123,29 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   // Generate reports in parallel with timeout
   const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
 
-  const [vpSummary, reportHtml, questions] = await Promise.all([
+  const [vpSummary, reportHtml] = await Promise.all([
     reportTimeout(generateVPSummary(ai, talentRows, jds, industry, role), 20000),
     reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 25000),
-    reportTimeout(generateQuestions(ai, talentRows, jds, industry, role), 10000),
   ]);
 
+  send({step:'report_ready',progress:100,
+    report_html: reportHtml || '<p>报告生成超时，请刷新重试。候选人数据已就绪。</p>',
+    vp_summary: vpSummary || '<p>摘要生成超时。</p>',
+  });  // === PHASE 1: Return structured data immediately ===
   const highTier = talentRows.filter(t=>t.tier==='high');
   const midTier = talentRows.filter(t=>t.tier==='mid');
-  const lowTier = talentRows.filter(t=>t.tier==='low');
+  const jdRows = jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',source_platform:'websearch',source_url:j.url||''}));
 
-  send({step:'done',progress:100,
-    talents:talentRows, jds:jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',
-      source_platform:'websearch',source_url:j.url||''})),
-    report_html: reportHtml || '<p>报告生成中，请稍后重试。数据已就绪。</p>',
-    vp_summary: vpSummary || '<p>摘要生成超时，请稍后重试。</p>',
-    questions: questions || ["招这个人要解决什么核心问题?","团队规模和汇报关系?","预算范围?"],
-    tier_stats: {high:highTier.length, mid:midTier.length, low:lowTier.length},
-    companies: companies.slice(0,15).map(c=>c.name),
-    stage: 1
+  send({step:'data_ready',progress:65,
+    talents:talentRows, jds:jdRows,
+    tier_stats:{high:highTier.length, mid:midTier.length, low:lowTier.length},
+    companies:companies.slice(0,15).map(c=>c.name),
+    questions:["快速搭建AI团队","产品AI化升级","紧急替补高管","探索新业务"],
+    stage:1
   });
+
+  // === PHASE 2: Generate reports (slower, don't block data) ===
+  send({step:'report',text:'正在生成报告，请稍候...',progress:70});
 }
 
 // ========== STEP 2: 定向人才地图 ==========
@@ -322,24 +323,18 @@ async function initTables() {
   await db.execute("CREATE TABLE IF NOT EXISTS jds (id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER, title TEXT, company TEXT, salary TEXT, location TEXT, experience TEXT, education TEXT, skills TEXT, source_platform TEXT, source_url TEXT)");
 }
 
-function ascii(s) { return (s||'').replace(/[^\x00-\x7F]/g, '').trim().substring(0,50) || 'unknown'; }
-
 async function storeResults(industry, role, talents, jds) {
   const db = turso();
-  const pname = ascii(role) + '-' + ascii(industry);
-  await db.execute("INSERT INTO positions (name, industry, role_direction) VALUES (?,?,?)", [pname, ascii(industry), ascii(role)]);
+  const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
+  await db.execute("INSERT INTO positions (name, industry, role_direction) VALUES ('"+pname+"','"+industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"')");
   const pos = await db.execute("SELECT last_insert_rowid() as id");
   const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
-  // Store ASCII-only fields for talents (names from LinkedIn are English)
   for (const t of talents.slice(0,30)) {
     const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
-    const name = (parts[0]||raw).substring(0,50);
-    await db.execute("INSERT INTO talents (position_id, name, current_title, current_company, tier, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?,?)",
-      [pid, ascii(name), ascii(parts[1]||''), ascii(t.company||''), classifyTier(t.company||'','',parts[1]||''), 'linkedin', t.url||'', 0.8]);
+    const name = (parts[0]||raw).substring(0,50).replace(/'/g,'');
+    await db.execute("INSERT INTO talents (position_id, name, current_title, current_company, tier, source_platform, source_url, confidence) VALUES ('"+pid+"','"+name+"','"+(parts[1]||'').replace(/'/g,'').substring(0,50)+"','"+(t.company||'').replace(/'/g,'').substring(0,50)+"','"+classifyTier(t.company||'','',parts[1]||'')+"','linkedin','"+(t.url||'').replace(/'/g,'')+"',0.8)");
   }
   for (const j of jds.slice(0,30)) {
-    await db.execute("INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES (?,?,?,?,?)",
-      [pid, ascii(j.title||'').substring(0,100), ascii(j.company||'').substring(0,100), 'websearch', j.url||'']);
+    await db.execute("INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES ('"+pid+"','"+(j.title||'').replace(/'/g,'').substring(0,80)+"','"+(j.company||'').replace(/'/g,'').substring(0,40)+"','websearch','"+(j.url||'').replace(/'/g,'')+"')");
   }
-  console.log('Stored: '+talents.length+'T + '+jds.length+'J');
 }

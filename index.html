@@ -322,10 +322,11 @@ async function startGenerate(){
       for(const line of lines){
         if(!line.startsWith('data: ')) continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='done'){updateProgress(100,'完成!');currentData=d;showResults(d);}
+          if(d.step==='data_ready'){updateProgress(65,'数据已就绪,正在生成报告...');currentData=d;showResults(d);}
+          else if(d.step==='report_ready'){updateProgress(100,'完成!');if(currentData){currentData.report_html=d.report_html;currentData.vp_summary=d.vp_summary;}showResults(currentData||d);}
+          else if(d.step==='done'){updateProgress(100,'完成!');currentData=d;showResults(d);}
           else if(d.step==='error'){alert(d.text);}
-          else{updateProgress(d.progress||50,d.text||'处理中...');
-            if(d.companies){document.getElementById('results').style.display='';document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${d.companies.length}</div><div class="stat-lbl">目标公司</div></div>`;}}
+          else{updateProgress(d.progress||50,d.text||'处理中...');if(d.companies){document.getElementById('results').style.display='';}}
         }catch(e){}
       }
     }
