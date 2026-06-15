@@ -23,10 +23,11 @@ export default async function handler(req, res) {
     if (!result || !result.rows.length) { send({error:'Position not found'}); res.end(); return; }
 
     const row = result.rows[0];
-    const talents = JSON.parse(row[0].get('value','') || '[]');
-    const jds = JSON.parse(row[1].get('value','') || '[]');
-    const industry = row[2].get('value','') || 'Industry';
-    const role = row[3].get('value','') || 'Role';
+    const v = (i) => (row[i] && row[i].value) || '';
+    const talents = JSON.parse(v(0) || '[]');
+    const jds = JSON.parse(v(1) || '[]');
+    const industry = v(2) || 'Industry';
+    const role = v(3) || 'Role';
 
     const tText = talents.slice(0,15).map(t => `${t.name||'?'}|${t.current_company||''}|${t.current_title||''}`).join('\n');
     const jText = jds.slice(0,15).map(j => `${j.title||''}|${j.company||''}`).join('\n');
