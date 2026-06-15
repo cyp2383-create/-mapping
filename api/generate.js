@@ -322,20 +322,24 @@ async function initTables() {
   await db.execute("CREATE TABLE IF NOT EXISTS jds (id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER, title TEXT, company TEXT, salary TEXT, location TEXT, experience TEXT, education TEXT, skills TEXT, source_platform TEXT, source_url TEXT)");
 }
 
+function ascii(s) { return (s||'').replace(/[^\x00-\x7F]/g, '').trim().substring(0,50) || 'unknown'; }
+
 async function storeResults(industry, role, talents, jds) {
   const db = turso();
-  await db.execute("INSERT INTO positions (name, industry, role_direction) VALUES (?,?,?)", [role+'-'+industry, industry, role]);
+  const pname = ascii(role) + '-' + ascii(industry);
+  await db.execute("INSERT INTO positions (name, industry, role_direction) VALUES (?,?,?)", [pname, ascii(industry), ascii(role)]);
   const pos = await db.execute("SELECT last_insert_rowid() as id");
   const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
+  // Store ASCII-only fields for talents (names from LinkedIn are English)
   for (const t of talents.slice(0,30)) {
     const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
     const name = (parts[0]||raw).substring(0,50);
-    const current_title = (parts[1]||'').substring(0,100);
-    const current_company = (t.company||parts[2]||'').substring(0,100);
-    const tier = classifyTier(current_company, '', current_title);
-    await db.execute("INSERT INTO talents (position_id, name, current_title, current_company, tier, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?,?)", [pid, name, current_title, current_company, tier, 'linkedin', t.url||'', 0.8]);
+    await db.execute("INSERT INTO talents (position_id, name, current_title, current_company, tier, source_platform, source_url, confidence) VALUES (?,?,?,?,?,?,?,?)",
+      [pid, ascii(name), ascii(parts[1]||''), ascii(t.company||''), classifyTier(t.company||'','',parts[1]||''), 'linkedin', t.url||'', 0.8]);
   }
   for (const j of jds.slice(0,30)) {
-    await db.execute("INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES (?,?,?,?,?)", [pid, (j.title||'').substring(0,100), (j.company||'').substring(0,100), 'websearch', j.url||'']);
+    await db.execute("INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES (?,?,?,?,?)",
+      [pid, ascii(j.title||'').substring(0,100), ascii(j.company||'').substring(0,100), 'websearch', j.url||'']);
   }
+  console.log('Stored: '+talents.length+'T + '+jds.length+'J');
 }
