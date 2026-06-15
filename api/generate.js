@@ -124,8 +124,8 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
 
   const [vpSummary, reportHtml] = await Promise.all([
-    reportTimeout(generateVPSummary(ai, talentRows, jds, industry, role), 20000),
-    reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 25000),
+    reportTimeout(generateVPSummary(ai, talentRows, jds, industry, role), 12000),
+    reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 15000),
   ]);
 
   send({step:'report_ready',progress:100,
@@ -224,33 +224,16 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
 async function generateVPSummary(ai, talents, jds, industry, role) {
   const highN = talents.filter(t=>t.tier==='high').length;
   const midN = talents.filter(t=>t.tier==='mid').length;
-  const jdText = jds.slice(0,10).map(j=>j.snippet||'').join('\n').substring(0,3000);
-  const prompt = `你是VP级战略顾问。为${industry}行业的${role}岗位写一份1页摘要(HTML格式,body内容):
-1. 市场供需: 人才池大小, 竞争激烈度
-2. 核心发现: JD中3个最重要的趋势变化
-3. 人才分层: 高端${highN}人/中端${midN}人, 各层次定义
-4. 建议: 招聘策略 + 时间线
-5. 风险提示
-白色背景, 专业简洁。JD数据: ${jdText}`;
-  return await ai.chat(prompt, 2000);
+  const jdText = jds.slice(0,5).map(j=>j.snippet||'').join('\n').substring(0,1500);
+  const prompt = `${industry}·${role}人才地图VP摘要。高端${highN}人/中端${midN}人。核心发现+趋势+建议。HTML body,简洁,800字内。JD:${jdText}`;
+  return await ai.chat(prompt, 1000);
 }
 
 async function generateMacroHtml(ai, talents, jds, industry, role) {
-  const highT = talents.filter(t=>t.tier==='high').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const midT = talents.filter(t=>t.tier==='mid').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const jdText = jds.slice(0,12).map(j=>j.snippet||'').join('\n').substring(0,4000);
-  const prompt = `为${industry}行业的${role}岗位生成HTML人才地图(VP级):
-1. 市场JD分析: 共性要求, 趋势变化, 硬技能TOP8
-2. 候选人画像: 经验分布, 公司来源, 薪酬对标
-3. 高-中-低三档人才定义(附代表人物)
-4. 高-中-低三档规律抽取: 专业/经验/能力的差异
-5. 目标候选人画像建议
-白色背景, body内容, 专业简洁。
-
-高端候选人: ${highT}
-中端候选人: ${midT}
-JD数据: ${jdText}`;
-  const html = await ai.chat(prompt, 3500);
+  const highT = talents.filter(t=>t.tier==='high').slice(0,5).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
+  const jdText = jds.slice(0,6).map(j=>j.snippet||'').join('\n').substring(0,2000);
+  const prompt = `${industry}·${role}人才画像(VP级)。硬技能TOP8+薪酬对标+三档人才分层。高端:${highT}。JD:${jdText}。HTML body,简洁。`;
+  const html = await ai.chat(prompt, 2000);
   let t = html.trim();
   if (t.startsWith('```html')) t = t.split('\n').slice(1).join('\n');
   if (t.endsWith('```')) t = t.slice(0,-3);
