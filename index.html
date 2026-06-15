@@ -5,227 +5,80 @@
 <title>人才地图Agent</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-:root {
-  --surface: rgba(255,255,255,.06); --surface-hover: rgba(255,255,255,.08);
-  --border: rgba(255,255,255,.1); --border-hover: rgba(255,255,255,.16);
-  --text: #f5f5f5; --text-secondary: #a8a8a8; --text-muted: #707070;
-  --accent: #f59e0b; --accent-glow: rgba(245,158,11,.25);
-  --r: 16px; --r-sm: 10px; --r-xs: 8px;
-}
-
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; min-height: 100vh;
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(99,102,241,.08) 0%, transparent 50%),
-    linear-gradient(180deg, #151525 0%, #121220 30%, #10101c 60%, #121220 100%);
-  background-attachment: fixed;
-}
-
-/* Depth-of-field map dots */
-.map-layer {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-}
-.map-layer::before {
-  content: ''; position: absolute; inset: -20%;
-  background-image:
-    radial-gradient(circle 1px at 10% 20%, rgba(245,158,11,.7), transparent 20px),
-    radial-gradient(circle 1px at 20% 45%, rgba(251,191,36,.5), transparent 15px),
-    radial-gradient(circle 1px at 15% 70%, rgba(245,158,11,.6), transparent 20px),
-    radial-gradient(circle 1px at 25% 15%, rgba(251,191,36,.5), transparent 15px),
-    radial-gradient(circle 2px at 30% 55%, rgba(245,158,11,.6), transparent 25px),
-    radial-gradient(circle 1px at 35% 85%, rgba(217,119,6,.4), transparent 15px),
-    radial-gradient(circle 2px at 40% 10%, rgba(245,158,11,.6), transparent 30px),
-    radial-gradient(circle 1px at 45% 60%, rgba(251,191,36,.5), transparent 15px),
-    radial-gradient(circle 2px at 50% 35%, rgba(251,191,36,.7), transparent 30px),
-    radial-gradient(circle 1px at 55% 80%, rgba(217,119,6,.4), transparent 15px),
-    radial-gradient(circle 2px at 60% 20%, rgba(245,158,11,.6), transparent 25px),
-    radial-gradient(circle 1px at 65% 55%, rgba(251,191,36,.5), transparent 15px),
-    radial-gradient(circle 1px at 70% 90%, rgba(217,119,6,.4), transparent 15px),
-    radial-gradient(circle 2px at 75% 15%, rgba(251,191,36,.6), transparent 30px),
-    radial-gradient(circle 1px at 80% 65%, rgba(245,158,11,.5), transparent 15px),
-    radial-gradient(circle 2px at 85% 40%, rgba(251,191,36,.6), transparent 30px),
-    radial-gradient(circle 1px at 90% 75%, rgba(217,119,6,.4), transparent 15px),
-    radial-gradient(circle 1px at 95% 10%, rgba(245,158,11,.6), transparent 20px),
-    radial-gradient(circle 1px at 5% 35%, rgba(251,191,36,.5), transparent 15px),
-    radial-gradient(circle 1px at 18% 85%, rgba(217,119,6,.4), transparent 15px),
-    radial-gradient(circle 2px at 28% 25%, rgba(251,191,36,.6), transparent 30px),
-    radial-gradient(circle 1px at 38% 95%, rgba(217,119,6,.3), transparent 15px),
-    radial-gradient(circle 1px at 48% 5%, rgba(245,158,11,.6), transparent 20px),
-    radial-gradient(circle 1px at 58% 45%, rgba(251,191,36,.5), transparent 15px),
-    radial-gradient(circle 2px at 68% 30%, rgba(245,158,11,.7), transparent 25px),
-    radial-gradient(circle 1px at 78% 70%, rgba(217,119,6,.4), transparent 15px),
-    radial-gradient(circle 1px at 88% 50%, rgba(251,191,36,.6), transparent 20px),
-    radial-gradient(circle 1px at 12% 90%, rgba(217,119,6,.4), transparent 15px),
-    radial-gradient(circle 1px at 42% 70%, rgba(251,191,36,.5), transparent 20px),
-    radial-gradient(circle 2px at 52% 28%, rgba(245,158,11,.7), transparent 35px),
-    radial-gradient(circle 1px at 32% 50%, rgba(251,191,36,.6), transparent 20px),
-    radial-gradient(circle 2px at 72% 58%, rgba(245,158,11,.6), transparent 25px);
-  background-size: 100% 100%;
-  filter: blur(1px);
-  transform: scale(1.15);
-  animation: mapDrift 10s ease-in-out infinite;
-}
-@keyframes mapDrift {
-  0%   { transform: scale(1.15) translate(0,0); }
-  50%  { transform: scale(1.17) translate(-.3%,-.2%); }
-  100% { transform: scale(1.15) translate(0,0); }
-}
-/* Vignette overlay */
-.map-layer::after {
-  content: ''; position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(12,12,24,.7) 100%);
-}
-/* Silk grain */
-.grain {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.015'/%3E%3C/svg%3E");
-  opacity: .4;
-}
-
-.container, .hero { position: relative; z-index: 1; }
-
-/* Header */
-.hero {
-  text-align: center; padding: 80px 24px 60px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(245,158,11,.08) 0%, transparent 60%);
-}
-/* 3D Embossed Logo */
-.logo-wrap {
-  display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 4px;
-}
-.logo-svg {
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,.4)) drop-shadow(0 0 8px rgba(245,158,11,.15));
-}
-.hero h1 {
-  font-size: 40px; font-weight: 800; letter-spacing: -1px;
-  background: linear-gradient(180deg, rgba(245,245,245,1) 0%, rgba(200,200,200,.9) 50%, rgba(160,160,160,.7) 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  text-shadow: 0 1px 0 rgba(255,255,255,.05), 0 -1px 0 rgba(0,0,0,.3);
-}
-.hero p { font-size: 16px; color: var(--text-secondary); margin-top: 12px; font-weight: 400; }
-
-.container { max-width: 1040px; margin: 0 auto; padding: 0 24px 40px; }
-
-/* Frosted glass card */
-.card {
-  background: rgba(255,255,255,.03); backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,.06); border-radius: var(--r); margin-bottom: 20px;
-}
-
-/* Input */
-.input-card { padding: 24px; }
-.input-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-.input-group { flex: 1; min-width: 150px; }
-.input-group label { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
-.input-group input {
-  width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--r-sm);
-  font-size: 15px; font-family: inherit; outline: none; transition: all .2s;
-  background: rgba(255,255,255,.04); color: var(--text);
-}
-.input-group input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-
-/* Buttons */
-.btn {
-  padding: 12px 24px; border: none; border-radius: 9999px; font-size: 15px; font-weight: 600;
-  cursor: pointer; transition: all .2s ease; font-family: inherit; white-space: nowrap;
-}
-.btn-primary { background: linear-gradient(135deg, #f59e0b, #d97706); color: #0a0a0a; box-shadow: 0 2px 8px rgba(245,158,11,.3); }
-.btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,.4); }
-.btn-primary:disabled { opacity: .4; transform: none; cursor: not-allowed; }
-.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
-.btn-ghost:hover { background: var(--surface-hover); color: var(--text); }
-.btn-sm { padding: 6px 14px; font-size: 12px; }
-
-/* Progress */
-.progress { display: none; margin-top: 16px; }
-.progress.active { display: block; }
-.progress-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
-.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s ease; }
-.progress-text { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
-
-/* Stats */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; padding: 24px; }
-.stat-card { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 20px; text-align: center; }
-.stat-num { font-size: 32px; font-weight: 800; color: var(--accent); line-height: 1; }
-.stat-lbl { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
-
-/* Tabs */
-.tabs { display: flex; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.02); padding: 0 4px; }
-.tab { padding: 12px 20px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: none; color: var(--text-secondary); transition: all .15s; font-family: inherit; border-bottom: 2px solid transparent; }
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.tab-content { display: none; padding: 24px; }
-.tab-content.active { display: block; }
-
-/* Tables */
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th { background: rgba(255,255,255,.03); padding: 12px; text-align: left; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; font-size: 11px; letter-spacing: .3px; border-bottom: 1px solid var(--border); }
-td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text); }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: var(--surface-hover); }
-
-/* Badges */
-.badge { display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
-.badge-blue { background: rgba(59,130,246,.15); color: #93c5fd; }
-.badge-green { background: rgba(16,185,129,.15); color: #6ee7b7; }
-.badge-yellow { background: rgba(245,158,11,.15); color: #fcd34d; }
-.badge-purple { background: rgba(139,92,246,.15); color: #c4b5fd; }
-
-.report-frame { min-height: 400px; color: var(--text); }
-.chat-panel { max-height: 360px; overflow-y: auto; }
-.chat-msg { margin-bottom: 12px; padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.5; }
-.chat-user { background: linear-gradient(135deg,#f59e0b,#d97706); color: #0a0a0a; margin-left: auto; font-weight: 500; }
-.chat-bot { background: var(--surface); border: 1px solid var(--border); margin-right: auto; }
-.chat-input-row { display: flex; gap: 8px; margin-top: 12px; }
-.chat-input-row input { flex: 1; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 14px; font-family: inherit; outline: none; background: rgba(255,255,255,.04); color: var(--text); }
-.chat-input-row input:focus { border-color: var(--accent); }
-
-.suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-
-.history-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); }
-.history-item:last-child { border-bottom: none; }
-.history-meta { font-size: 12px; color: var(--text-secondary); }
-
-.empty { text-align: center; padding: 48px; color: var(--text-muted); font-size: 14px; }
-.footer { text-align: center; padding: 40px; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--border); }
-
-@media (max-width: 640px) {
-  .hero { padding: 48px 16px 36px; }
-  .hero h1 { font-size: 28px; }
-  .input-row { flex-direction: column; }
-  .input-group { min-width: 100%; }
-}
+:root{--surface:rgba(255,255,255,.06);--surface-hover:rgba(255,255,255,.08);--border:rgba(255,255,255,.1);--text:#f5f5f5;--text-secondary:#a8a8a8;--text-muted:#707070;--accent:#f59e0b;--accent-glow:rgba(245,158,11,.25);--r:16px;--r-sm:10px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.08) 0%,transparent 50%),linear-gradient(180deg,#151525 0%,#121220 30%,#10101c 60%,#121220 100%);background-attachment:fixed}
+.map-layer{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.map-layer::before{content:'';position:absolute;inset:-20%;background-image:radial-gradient(circle 1px at 10% 20%,rgba(245,158,11,.7),transparent 20px),radial-gradient(circle 1px at 25% 15%,rgba(251,191,36,.5),transparent 15px),radial-gradient(circle 2px at 30% 55%,rgba(245,158,11,.6),transparent 25px),radial-gradient(circle 2px at 50% 35%,rgba(251,191,36,.7),transparent 30px),radial-gradient(circle 2px at 60% 20%,rgba(245,158,11,.6),transparent 25px),radial-gradient(circle 2px at 75% 15%,rgba(251,191,36,.6),transparent 30px),radial-gradient(circle 2px at 85% 40%,rgba(251,191,36,.6),transparent 30px),radial-gradient(circle 2px at 68% 30%,rgba(245,158,11,.7),transparent 25px),radial-gradient(circle 2px at 52% 28%,rgba(245,158,11,.7),transparent 35px),radial-gradient(circle 2px at 72% 58%,rgba(245,158,11,.6),transparent 25px);background-size:100% 100%;filter:blur(1px);transform:scale(1.15);animation:mapDrift 10s ease-in-out infinite}
+@keyframes mapDrift{0%{transform:scale(1.15) translate(0,0)}50%{transform:scale(1.17) translate(-.3%,-.2%)}100%{transform:scale(1.15) translate(0,0)}}
+.map-layer::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,transparent 45%,rgba(12,12,24,.7) 100%)}
+.grain{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.015'/%3E%3C/svg%3E");opacity:.4}
+.container,.hero{position:relative;z-index:1}
+.hero{text-align:center;padding:80px 24px 60px;background:radial-gradient(ellipse at 50% 0%,rgba(245,158,11,.08) 0%,transparent 60%)}
+.logo-wrap{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:4px}
+.hero h1{font-size:40px;font-weight:800;letter-spacing:-1px;background:linear-gradient(180deg,rgba(245,245,245,1) 0%,rgba(200,200,200,.9) 50%,rgba(160,160,160,.7) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 1px 0 rgba(255,255,255,.05),0 -1px 0 rgba(0,0,0,.3)}
+.hero p{font-size:16px;color:var(--text-secondary);margin-top:12px}
+.container{max-width:1040px;margin:0 auto;padding:0 24px 40px}
+.card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:var(--r);margin-bottom:20px}
+.input-card{padding:24px}
+.input-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.input-group{flex:1;min-width:150px}
+.input-group label{display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.input-group input{width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:15px;font-family:inherit;outline:none;transition:all .2s;background:rgba(255,255,255,.04);color:var(--text)}
+.input-group input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.btn{padding:12px 24px;border:none;border-radius:9999px;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,#f59e0b,#d97706);color:#0a0a0a;box-shadow:0 2px 8px rgba(245,158,11,.3)}
+.btn-primary:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.4;transform:none;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--text-secondary);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--surface-hover);color:var(--text)}
+.btn-sm{padding:6px 14px;font-size:12px}
+.progress{display:none;margin-top:16px}
+.progress.active{display:block}
+.progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease}
+.progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;padding:24px}
+.stat-card{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--r-sm);padding:20px;text-align:center}
+.stat-num{font-size:32px;font-weight:800;color:var(--accent);line-height:1}
+.stat-lbl{font-size:12px;color:var(--text-secondary);margin-top:6px}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);padding:0 4px}
+.tab{padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text-secondary);transition:all .15s;font-family:inherit;border-bottom:2px solid transparent}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{display:none;padding:24px}
+.tab-content.active{display:block}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:rgba(255,255,255,.03);padding:12px;text-align:left;font-weight:600;color:var(--text-secondary);text-transform:uppercase;font-size:11px;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+td{padding:12px;border-bottom:1px solid var(--border);color:var(--text)}
+tr:hover td{background:var(--surface-hover)}
+.badge{display:inline-block;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:500}
+.badge-green{background:rgba(16,185,129,.15);color:#6ee7b7}
+.badge-yellow{background:rgba(245,158,11,.15);color:#fcd34d}
+.badge-purple{background:rgba(139,92,246,.15);color:#c4b5fd}
+.chat-panel{max-height:360px;overflow-y:auto}
+.chat-msg{margin-bottom:12px;padding:12px 16px;border-radius:12px;font-size:14px;max-width:85%;line-height:1.5}
+.chat-user{background:linear-gradient(135deg,#f59e0b,#d97706);color:#0a0a0a;margin-left:auto;font-weight:500}
+.chat-bot{background:var(--surface);border:1px solid var(--border);margin-right:auto}
+.chat-input-row{display:flex;gap:8px;margin-top:12px}
+.chat-input-row input{flex:1;padding:12px 16px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:14px;font-family:inherit;outline:none;background:rgba(255,255,255,.04);color:var(--text)}
+.chat-input-row input:focus{border-color:var(--accent)}
+.suggestions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.history-item{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-bottom:1px solid var(--border)}
+.history-item:last-child{border-bottom:none}
+.history-meta{font-size:12px;color:var(--text-secondary)}
+.empty{text-align:center;padding:48px;color:var(--text-muted);font-size:14px}
+.footer{text-align:center;padding:40px;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border)}
+@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}}
 </style>
 </head>
 <body>
-
-<div class="map-layer"></div>
-<div class="grain"></div>
+<div class="map-layer"></div><div class="grain"></div>
 
 <div class="hero">
   <div class="logo-wrap">
-    <svg class="logo-svg" width="38" height="38" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="logoGrad" x1="4" y1="4" x2="44" y2="44">
-          <stop offset="0%" stop-color="#fbbf24"/>
-          <stop offset="100%" stop-color="#d97706"/>
-        </linearGradient>
-        <filter id="emboss">
-          <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".5"/>
-          <feDropShadow dx="0" dy="-1" stdDeviation="1" flood-color="#fff" flood-opacity=".08"/>
-        </filter>
-      </defs>
-      <rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="rgba(20,20,32,.8)" stroke="url(#logoGrad)" stroke-width="2.5" filter="url(#emboss)"/>
-      <rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="url(#logoGrad)" opacity=".06"/>
-      <circle cx="24" cy="32" r="3" fill="url(#logoGrad)"/>
-      <line x1="24" y1="28" x2="24" y2="16" stroke="url(#logoGrad)" stroke-width="3.2" stroke-linecap="round"/>
-      <line x1="24" y1="16" x2="18" y2="24" stroke="url(#logoGrad)" stroke-width="2.6" stroke-linecap="round"/>
-      <line x1="24" y1="16" x2="30" y2="24" stroke="url(#logoGrad)" stroke-width="2.6" stroke-linecap="round"/>
-    </svg>
+    <svg width="38" height="38" viewBox="0 0 48 48" fill="none"><defs><linearGradient id="lg" x1="4" y1="4" x2="44" y2="44"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#d97706"/></linearGradient><filter id="emboss"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".5"/><feDropShadow dx="0" dy="-1" stdDeviation="1" flood-color="#fff" flood-opacity=".08"/></filter></defs><rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="rgba(20,20,32,.8)" stroke="url(#lg)" stroke-width="2.5" filter="url(#emboss)"/><rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="url(#lg)" opacity=".06"/><circle cx="24" cy="32" r="3" fill="url(#lg)"/><line x1="24" y1="28" x2="24" y2="16" stroke="url(#lg)" stroke-width="3.2" stroke-linecap="round"/><line x1="24" y1="16" x2="18" y2="24" stroke="url(#lg)" stroke-width="2.6" stroke-linecap="round"/><line x1="24" y1="16" x2="30" y2="24" stroke="url(#lg)" stroke-width="2.6" stroke-linecap="round"/></svg>
     <h1>人才地图Agent</h1>
   </div>
   <p>AI驱动的人才地图 · 输入行业+岗位，一键生成人才画像报告</p>
@@ -240,34 +93,31 @@ tr:hover td { background: var(--surface-hover); }
     <div class="input-group" style="max-width:120px"><label>城市(可选)</label><input id="city" placeholder="北京"></div>
     <button class="btn btn-primary" id="btnGen" onclick="startGenerate()">生成人才地图</button>
   </div>
-  <div class="progress" id="progress">
-    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-    <div class="progress-text" id="progressText">准备中...</div>
-  </div>
+  <div class="progress" id="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div><div class="progress-text" id="progressText">准备中...</div></div>
 </div>
 
 <div class="card" id="results" style="display:none">
   <div class="stats" id="statsRow"></div>
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('report')">报告</button>
-    <button class="tab" onclick="switchTab('talents')">候选人</button>
+    <button class="tab active" onclick="switchTab('talents')">候选人</button>
     <button class="tab" onclick="switchTab('jds')">招聘JD</button>
     <button class="tab" onclick="switchTab('chat')">追问</button>
+    <button class="tab" id="btnOpenReport" onclick="openReport()" style="display:none;color:#f59e0b;font-weight:700">查看完整报告</button>
   </div>
-  <div class="tab-content active" id="tab-report">
-    <div class="report-frame" id="reportContent"></div>
-    <div style="margin-top:12px"><button class="btn btn-primary btn-sm" id="btnOpenReport" onclick="openReport()" style="font-size:12px;display:none">在新窗口打开完整报告</button></div>
+  <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>联系</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="tab-content" id="tab-chat">
+    <div class="chat-panel" id="chatMessages"></div>
     <div class="suggestions" id="suggestedQuestions"></div>
-    <!-- Step 2: Structured follow-up -->
+    <div class="chat-input-row"><input id="chatInput" placeholder="追问" onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
     <div id="step2Panel" style="margin-top:20px;padding:20px;background:rgba(255,255,255,.03);border-radius:var(--r-sm);border:1px solid var(--border);display:none">
       <div style="font-size:14px;font-weight:600;margin-bottom:12px">定向候选人画像 · 快速追问</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='搭建0-1的AI产品团队';document.getElementById('ctx_team').value='带5人团队,汇报给CTO';document.getElementById('ctx_budget').value='年薪60-80W,P0紧急';generateStage2()">快速搭建AI团队</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='现有产品AI化升级';document.getElementById('ctx_team').value='独立贡献者或2-3人小组';document.getElementById('ctx_budget').value='年薪40-60W,P1';generateStage2()">产品AI化升级</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='替代离职的AI产品负责人';document.getElementById('ctx_team').value='接管10人团队';document.getElementById('ctx_budget').value='年薪80-120W,P0一周内';generateStage2()">紧急替补高管</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:12px" onclick="document.getElementById('ctx_problem').value='探索AI新业务方向';document.getElementById('ctx_team').value='从0开始搭建';document.getElementById('ctx_budget').value='年薪50-70W,P2';generateStage2()">探索新业务</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('搭建0-1的AI产品团队','带5人团队,汇报给CTO','年薪60-80W,P0紧急')">快速搭建AI团队</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('现有产品AI化升级','独立贡献者或2-3人小组','年薪40-60W,P1')">产品AI化升级</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('替代离职的AI产品负责人','接管10人团队','年薪80-120W,P0一周内')">紧急替补高管</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('探索AI新业务方向','从0开始搭建','年薪50-70W,P2')">探索新业务</button>
       </div>
-      <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px">或手动填写：</div>
       <div style="display:grid;gap:12px">
         <div class="input-group"><label>招这个人要解决什么核心问题？</label><input id="ctx_problem" placeholder="例如: 搭建0-1的大模型产品团队"></div>
         <div class="input-group"><label>团队规模和汇报关系？</label><input id="ctx_team" placeholder="例如: 带5人团队, 直接汇报给CTO"></div>
@@ -276,148 +126,89 @@ tr:hover td { background: var(--surface-hover); }
       <button class="btn btn-primary" style="margin-top:12px" onclick="generateStage2()">生成定向人才地图</button>
     </div>
   </div>
-  <div class="tab-content" id="tab-talents">
-    <div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>技能</th><th>联系</th><th>来源</th></tr></thead><tbody></tbody></table></div>
-  </div>
-  <div class="tab-content" id="tab-jds">
-    <div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>技能</th><th>来源</th></tr></thead><tbody></tbody></table></div>
-  </div>
-  <div class="tab-content" id="tab-chat">
-    <div class="chat-panel" id="chatMessages"></div>
-    <div class="chat-input-row">
-      <input id="chatInput" placeholder="追问: 这些人里哪些有海外背景?" onkeydown="if(event.key==='Enter')sendChat()">
-      <button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button>
-    </div>
-  </div>
 </div>
 
 <div class="card" id="historyCard">
   <div style="padding:20px 24px;border-bottom:1px solid var(--border)"><span style="font-size:15px;font-weight:600">历史报告</span></div>
   <div style="padding:0 24px" id="historyList"><div class="empty">加载中...</div></div>
 </div>
-
 <div class="footer">Tavily · LinkedIn · GitHub · DeepSeek · Powered by AI</div>
-
 </div>
 
 <script>
 let currentData=null;
-
 async function startGenerate(){
   const industry=document.getElementById('industry').value.trim(),role=document.getElementById('role').value.trim();
   if(!industry||!role) return;
-  const btn=document.getElementById('btnGen'); btn.disabled=true;
-  const prog=document.getElementById('progress'); prog.classList.add('active');
+  const btn=document.getElementById('btnGen');btn.disabled=true;
+  const prog=document.getElementById('progress');prog.classList.add('active');
   updateProgress(5,'连接中...');
   try{
     const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({industry,role,city:document.getElementById('city').value.trim()})});
-    const reader=resp.body.getReader(); const decoder=new TextDecoder(); let buffer='';
+    const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='';
     while(true){
-      const{value,done}=await reader.read(); if(done) break;
-      buffer+=decoder.decode(value,{stream:true}); const lines=buffer.split('\n'); buffer=lines.pop()||'';
-      for(const line of lines){
-        if(!line.startsWith('data: ')) continue;
+      const{value,done}=await reader.read();if(done)break;
+      buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
+      for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='data_ready'){updateProgress(65,'数据已就绪,正在生成报告...');currentData=d;showResults(d);}
-          else if(d.step==='report_ready'){updateProgress(100,'完成!');if(currentData){currentData.report_html=d.report_html;}else{currentData=d;}showResults(currentData);}
-          else if(d.step==='done'){updateProgress(100,'完成!');currentData=d;showResults(d);}
+          if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;showResults(d);}
+          else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);}
+          else if(d.step==='done'){updateProgress(100,'完成');currentData=d;showResults(d);}
           else if(d.step==='error'){alert(d.text);}
-          else{updateProgress(d.progress||50,d.text||'处理中...');if(d.companies){document.getElementById('results').style.display='';}}
+          else{updateProgress(d.progress||50,d.text||'处理中...');if(d.companies)document.getElementById('results').style.display='';}
         }catch(e){}
       }
     }
   }catch(e){alert('生成失败');}
   setTimeout(()=>{prog.classList.remove('active');btn.disabled=false},500);
 }
-
 function updateProgress(pct,text){document.getElementById('progressFill').style.width=pct+'%';document.getElementById('progressText').textContent=text;}
-
 function showResults(data){
   document.getElementById('results').style.display='';
   document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>${data.tier_stats?`<div class="stat-card"><div class="stat-num" style="color:#10b981">${data.tier_stats.high}</div><div class="stat-lbl">高端</div></div><div class="stat-card"><div class="stat-num" style="color:#f59e0b">${data.tier_stats.mid}</div><div class="stat-lbl">中端</div></div><div class="stat-card"><div class="stat-num" style="color:#ef4444">${data.tier_stats.low}</div><div class="stat-lbl">低端</div></div>`:''}`;
-  document.getElementById('reportContent').innerHTML=data.report_html||'<div class="empty">报告生成中...</div>';
-  if(data.report_html){document.getElementById('btnOpenReport').style.display='';document.getElementById('btnOpenReport').textContent='在新窗口打开完整报告('+data.report_html.length+'字)';}
-  const qDiv=document.getElementById('suggestedQuestions');
-  if(data.questions?.length){qDiv.innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">追问建议:</span>'+data.questions.map(q=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${q}')">${q}</button>`).join('');}else{qDiv.innerHTML='';}
-  // Show step 2 panel if stage 1
-  if(data.stage===1){document.getElementById('step2Panel').style.display=''; currentData=data;}
-  const tbody=document.querySelector('#talentTable tbody'); tbody.innerHTML='';
-  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class=\"badge badge-green\">高</span>':t.tier==='mid'?'<span class=\"badge badge-yellow\">中</span>':'<span class=\"badge badge-purple\">低</span>';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''} ${tierBadge}</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.skills||''}</td><td>${t.contact_type||''}</td><td><span class="badge badge-yellow">${t.source_platform||''}</span></td></tr>`;});
-  const jbody=document.querySelector('#jdTable tbody'); jbody.innerHTML='';
-  (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.skills||''}</td><td><span class="badge badge-green">${j.source_platform||''}</span></td></tr>`;});
-  switchTab('report');loadHistory();
+  // Report button
+  if(data.report_html&&data.report_html.length>100){const rb=document.getElementById('btnOpenReport');rb.style.display='';rb.textContent='查看完整报告('+data.report_html.length+'字)';}
+  // Talents table
+  const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
+  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class=\"badge badge-green\">高</span>':t.tier==='mid'?'<span class=\"badge badge-yellow\">中</span>':'<span class=\"badge badge-purple\">低</span>';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td>${t.contact_type||''}</td><td><span class=\"badge badge-yellow\">${t.source_platform||''}</span></td></tr>`;});
+  // JDs table
+  const jbody=document.querySelector('#jdTable tbody');jbody.innerHTML='';
+  (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td><span class=\"badge badge-green\">${j.source_platform||''}</span></td></tr>`;});
+  // Questions
+  if(data.questions?.length){document.getElementById('suggestedQuestions').innerHTML='<span style=\"font-size:12px;color:var(--text-secondary)\">追问:</span> '+data.questions.map(q=>`<button class=\"btn btn-ghost btn-sm\" onclick=\"askQuestion('${q}')\">${q}</button>`).join('');}
+  // Show step2 if stage1
+  if(data.stage===1)document.getElementById('step2Panel').style.display='';
+  switchTab('talents');loadHistory();
 }
-
-function openReport(){
-  if(!currentData||!currentData.report_html) return;
-  const w=window.open('','_blank');
-  w.document.write(currentData.report_html);
-  w.document.close();
-}
-
-async function generateStage2(){
-  if(!currentData) return;
-  const ctx = {
-    problem: document.getElementById('ctx_problem').value.trim(),
-    team: document.getElementById('ctx_team').value.trim(),
-    budget: document.getElementById('ctx_budget').value.trim(),
-  };
-  const btn=document.getElementById('btnGen'); btn.disabled=true;
-  const prog=document.getElementById('progress'); prog.classList.add('active');
-  updateProgress(10,'分析需求上下文...');
-  try{
-    const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim(),stage:2,context:{...currentData,userContext:ctx}})});
-    const reader=resp.body.getReader(); const decoder=new TextDecoder(); let buffer='';
-    while(true){
-      const{value,done}=await reader.read(); if(done) break;
-      buffer+=decoder.decode(value,{stream:true}); const lines=buffer.split('\n'); buffer=lines.pop()||'';
-      for(const line of lines){
-        if(!line.startsWith('data: ')) continue;
-        try{const d=JSON.parse(line.slice(6));
-          if(d.step==='done'){updateProgress(100,'完成!');currentData=d;showResults(d);document.getElementById('step2Panel').style.display='none';}
-          else{updateProgress(d.progress||50,d.text||'处理中...');}
-        }catch(e){}
-      }
-    }
-  }catch(e){alert('生成失败');}
-  setTimeout(()=>{prog.classList.remove('active');btn.disabled=false},500);
-}
-
 function switchTab(tab){
-  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['report','talents','jds','chat'][i]===tab);});
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['talents','jds','chat','report'][i]===tab||t.id==='btnOpenReport'&&tab==='report');});
+  if(tab==='report'){openReport();return;}
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
 }
-
-async function askQuestion(q){document.getElementById('chatInput').value=q;switchTab('chat');sendChat();}
-
+function openReport(){if(currentData&&currentData.report_html){const w=window.open('','_blank');w.document.write(currentData.report_html);w.document.close()}}
 async function sendChat(){
-  const input=document.getElementById('chatInput');const q=input.value.trim();
-  if(!q||!currentData) return; input.value='';
-  const msgs=document.getElementById('chatMessages');
-  msgs.innerHTML+=`<div class="chat-msg chat-user">${q}</div>`;
-  try{
-    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData})});
-    const d=await resp.json(); msgs.innerHTML+=`<div class="chat-msg chat-bot">${d.answer||d.error}</div>`;
-  }catch(e){msgs.innerHTML+=`<div class="chat-msg chat-bot">抱歉，暂时不可用。</div>`;}
+  const input=document.getElementById('chatInput');const q=input.value.trim();if(!q||!currentData)return;input.value='';
+  const msgs=document.getElementById('chatMessages');msgs.innerHTML+=`<div class=\"chat-msg chat-user\">${q}</div>`;
+  try{const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData})});const d=await resp.json();msgs.innerHTML+=`<div class=\"chat-msg chat-bot\">${d.answer||d.error}</div>`;}catch(e){}
   msgs.scrollTop=msgs.scrollHeight;
 }
-
+function askQuestion(q){document.getElementById('chatInput').value=q;switchTab('chat');sendChat()}
+function fillAndGo(p,t,b){document.getElementById('ctx_problem').value=p;document.getElementById('ctx_team').value=t;document.getElementById('ctx_budget').value=b;generateStage2()}
+async function generateStage2(){
+  if(!currentData)return;const ctx={problem:document.getElementById('ctx_problem').value.trim(),team:document.getElementById('ctx_team').value.trim(),budget:document.getElementById('ctx_budget').value.trim()};
+  updateProgress(10,'分析需求...');
+  try{const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim(),stage:2,context:{...currentData,userContext:ctx}})});
+  const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='';
+  while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';for(const line of lines){if(!line.startsWith('data: '))continue;try{const d=JSON.parse(line.slice(6));if(d.step==='done'){updateProgress(100,'完成');currentData=d;showResults(d);document.getElementById('step2Panel').style.display='none';}}catch(e){}}}
+  }catch(e){}
+}
 async function loadHistory(){
   const el=document.getElementById('historyList');
-  try{
-    const resp=await fetch('/api/data?list=true');if(!resp.ok) throw new Error('API error');
-    const d=await resp.json();const positions=d.positions||[];
-    if(!positions.length){el.innerHTML='<div class="empty">暂无历史报告</div>';return;}
-    el.innerHTML=positions.map(p=>`<div class="history-item"><div><span style="font-weight:600">${p.industry||'?'}·${p.role_direction||'?'}</span><span class="history-meta" style="margin-left:8px">#${p.id} ${p.created_at?.substring(0,10)||''}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${p.id})">查看</button></div>`).join('');
-  }catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
+  try{const resp=await fetch('/api/data?list=true');if(!resp.ok)throw new Error('API');const d=await resp.json();const p=d.positions||[];if(!p.length){el.innerHTML='<div class=\"empty\">暂无历史报告</div>';return;}
+  el.innerHTML=p.map(x=>`<div class=\"history-item\"><div><span style=\"font-weight:600\">${x.industry||'?'}·${x.role_direction||'?'}</span><span class=\"history-meta\" style=\"margin-left:8px\">#${x.id}</span></div><button class=\"btn btn-ghost btn-sm\" onclick=\"loadPosition(${x.id})\">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class=\"empty\">暂无历史报告</div>';}
 }
-
-async function loadPosition(id){
-  const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();
-  currentData=data;showResults(data);document.getElementById('results').scrollIntoView({behavior:'smooth'});
-}
+async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();currentData=data;showResults(data);}
 loadHistory();
 </script>
 </body>
