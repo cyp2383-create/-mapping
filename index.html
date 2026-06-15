@@ -255,8 +255,23 @@ tr:hover td { background: var(--surface-hover); }
     <button class="tab" onclick="switchTab('chat')">追问</button>
   </div>
   <div class="tab-content active" id="tab-report">
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn btn-primary btn-sm active" id="btnFullRpt" onclick="switchReportView('full')" style="font-size:12px">完整报告</button>
+      <button class="btn btn-ghost btn-sm" id="btnVpSum" onclick="switchReportView('vp')" style="font-size:12px">VP摘要(1页)</button>
+    </div>
     <div class="report-frame" id="reportContent"></div>
+    <div class="report-frame" id="vpSummaryContent" style="display:none"></div>
     <div class="suggestions" id="suggestedQuestions"></div>
+    <!-- Step 2: Structured follow-up -->
+    <div id="step2Panel" style="margin-top:20px;padding:20px;background:rgba(255,255,255,.03);border-radius:var(--r-sm);border:1px solid var(--border);display:none">
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">定向候选人画像 · 请补充以下信息</div>
+      <div style="display:grid;gap:12px">
+        <div class="input-group"><label>招这个人要解决什么核心问题？</label><input id="ctx_problem" placeholder="例如: 搭建0-1的大模型产品团队"></div>
+        <div class="input-group"><label>团队规模和汇报关系？</label><input id="ctx_team" placeholder="例如: 带5人团队, 直接汇报给CTO"></div>
+        <div class="input-group"><label>预算范围？紧急程度？</label><input id="ctx_budget" placeholder="例如: 年薪60-80W, P0紧急, 1个月内到位"></div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="generateStage2()">生成定向人才地图</button>
+    </div>
   </div>
   <div class="tab-content" id="tab-talents">
     <div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>技能</th><th>联系</th><th>来源</th></tr></thead><tbody></tbody></table></div>
@@ -315,15 +330,55 @@ function updateProgress(pct,text){document.getElementById('progressFill').style.
 
 function showResults(data){
   document.getElementById('results').style.display='';
-  document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>`;
+  document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>${data.tier_stats?`<div class="stat-card"><div class="stat-num" style="color:#10b981">${data.tier_stats.high}</div><div class="stat-lbl">高端</div></div><div class="stat-card"><div class="stat-num" style="color:#f59e0b">${data.tier_stats.mid}</div><div class="stat-lbl">中端</div></div><div class="stat-card"><div class="stat-num" style="color:#ef4444">${data.tier_stats.low}</div><div class="stat-lbl">低端</div></div>`:''}`;
   document.getElementById('reportContent').innerHTML=data.report_html||'<div class="empty">报告生成中...</div>';
+  if(data.vp_summary){document.getElementById('vpSummaryContent').innerHTML=data.vp_summary;}
+  switchReportView('full');
   const qDiv=document.getElementById('suggestedQuestions');
   if(data.questions?.length){qDiv.innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">追问建议:</span>'+data.questions.map(q=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${q}')">${q}</button>`).join('');}else{qDiv.innerHTML='';}
+  // Show step 2 panel if stage 1
+  if(data.stage===1){document.getElementById('step2Panel').style.display=''; currentData=data;}
   const tbody=document.querySelector('#talentTable tbody'); tbody.innerHTML='';
-  (data.talents||[]).forEach(t=>{tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.skills||''}</td><td>${t.contact_type||''}</td><td><span class="badge badge-yellow">${t.source_platform||''}</span></td></tr>`;});
+  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class=\"badge badge-green\">高</span>':t.tier==='mid'?'<span class=\"badge badge-yellow\">中</span>':'<span class=\"badge badge-purple\">低</span>';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''} ${tierBadge}</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.skills||''}</td><td>${t.contact_type||''}</td><td><span class="badge badge-yellow">${t.source_platform||''}</span></td></tr>`;});
   const jbody=document.querySelector('#jdTable tbody'); jbody.innerHTML='';
   (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.skills||''}</td><td><span class="badge badge-green">${j.source_platform||''}</span></td></tr>`;});
   switchTab('report');loadHistory();
+}
+
+function switchReportView(view){
+  document.getElementById('btnFullRpt').className = view==='full'?'btn btn-primary btn-sm active':'btn btn-ghost btn-sm';
+  document.getElementById('btnVpSum').className = view==='vp'?'btn btn-primary btn-sm active':'btn btn-ghost btn-sm';
+  document.getElementById('reportContent').style.display = view==='full'?'':'none';
+  document.getElementById('vpSummaryContent').style.display = view==='vp'?'':'none';
+}
+
+async function generateStage2(){
+  if(!currentData) return;
+  const ctx = {
+    problem: document.getElementById('ctx_problem').value.trim(),
+    team: document.getElementById('ctx_team').value.trim(),
+    budget: document.getElementById('ctx_budget').value.trim(),
+  };
+  const btn=document.getElementById('btnGen'); btn.disabled=true;
+  const prog=document.getElementById('progress'); prog.classList.add('active');
+  updateProgress(10,'分析需求上下文...');
+  try{
+    const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim(),stage:2,context:{...currentData,userContext:ctx}})});
+    const reader=resp.body.getReader(); const decoder=new TextDecoder(); let buffer='';
+    while(true){
+      const{value,done}=await reader.read(); if(done) break;
+      buffer+=decoder.decode(value,{stream:true}); const lines=buffer.split('\n'); buffer=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: ')) continue;
+        try{const d=JSON.parse(line.slice(6));
+          if(d.step==='done'){updateProgress(100,'完成!');currentData=d;showResults(d);document.getElementById('step2Panel').style.display='none';}
+          else{updateProgress(d.progress||50,d.text||'处理中...');}
+        }catch(e){}
+      }
+    }
+  }catch(e){alert('生成失败');}
+  setTimeout(()=>{prog.classList.remove('active');btn.disabled=false},500);
 }
 
 function switchTab(tab){
