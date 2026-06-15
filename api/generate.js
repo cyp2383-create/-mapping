@@ -55,6 +55,13 @@ function createTavily() {
   }};
 }
 
+function cleanJson(text) {
+  let t = (text||'').trim();
+  if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n');
+  if (t.endsWith('```')) t = t.slice(0,-3);
+  return t.trim();
+}
+
 // ========== Tier Classification ==========
 
 function classifyTier(companyName, titleStr) {
@@ -229,7 +236,10 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
     const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
     return {name:parts[0]||raw.substring(0,30),current_title:parts[1]||'',
       current_company:t.company||parts[2]||'',source_platform:'linkedin',
-      source_url:t.url||'',tier: classifyTier(t.company||'', parts[1]||''),level:extractLevel(parts[1]||'')};
+      source_url:t.url||'',tier: classifyTier(t.company||'', parts[1]||''),level:extractLevel(parts[1]||''),
+      education:'', languages:'', certifications:'', influence_score:0, location:'',
+      contact_type:t.url?'linkedin':'none', contact_value:t.url||''
+    };
   });
 
   send({step:'done',progress:100,
