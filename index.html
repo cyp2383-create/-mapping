@@ -235,7 +235,7 @@ tr:hover td { background: var(--surface-hover); }
 
 <div class="card input-card">
   <div class="input-row">
-    <div class="input-group"><label>行业</label><input id="industry" placeholder="AI大模型" value="AI大模型"></div>
+    <div class="input-group"><label>行业</label><input id="industry" placeholder="互联网行业" value="互联网行业"></div>
     <div class="input-group"><label>岗位</label><input id="role" placeholder="AI产品经理" value="AI产品经理"></div>
     <div class="input-group" style="max-width:120px"><label>城市(可选)</label><input id="city" placeholder="北京"></div>
     <button class="btn btn-primary" id="btnGen" onclick="startGenerate()">生成人才地图</button>
@@ -407,7 +407,7 @@ async function loadHistory(){
     const resp=await fetch('/api/data?list=true');if(!resp.ok) throw new Error('API error');
     const d=await resp.json();const positions=d.positions||[];
     if(!positions.length){el.innerHTML='<div class="empty">暂无历史报告</div>';return;}
-    el.innerHTML=positions.map(p=>`<div class="history-item"><div><span style="font-weight:600">${p.name||'#'+p.id}</span><span class="history-meta" style="margin-left:8px">${p.industry||''}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${p.id})">查看</button></div>`).join('');
+    el.innerHTML=positions.map(p=>`<div class="history-item"><div><span style="font-weight:600">${p.industry||'?'}·${p.role_direction||'?'}</span><span class="history-meta" style="margin-left:8px">#${p.id} ${p.created_at?.substring(0,10)||''}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${p.id})">查看</button></div>`).join('');
   }catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
 }
 

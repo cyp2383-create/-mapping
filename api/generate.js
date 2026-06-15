@@ -119,8 +119,8 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     };
   });
 
-  // Store results first (fast)
-  await storeResults(industry, role, talents, jds);
+  // Store results (best-effort, don't block)
+  storeResults(industry, role, talents, jds).catch(e => console.log('store error:', e.message));
 
   // Generate reports in parallel with timeout
   const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
