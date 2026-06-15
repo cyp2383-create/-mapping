@@ -126,25 +126,20 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     };
   });
 
-  // Store results after parsing
-  storeResults(industry, role, talentRows, jdRows).catch(e => console.log('store error:', e.message));
-
-  // Generate reports in parallel with timeout
-  const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
-
-  const [vpSummary, reportHtml] = await Promise.all([
-    reportTimeout(generateVPSummary(ai, talentRows, jds, industry, role), 12000),
-    reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 15000),
-  ]);
-
-  send({step:'report_ready',progress:100,
-    report_html: reportHtml || '<p>报告生成超时，请刷新重试。候选人数据已就绪。</p>',
-    vp_summary: vpSummary || '<p>摘要生成超时。</p>',
-  });  // === PHASE 1: Return structured data immediately ===
   const highTier = talentRows.filter(t=>t.tier==='high');
   const midTier = talentRows.filter(t=>t.tier==='mid');
   const lowTier = talentRows.filter(t=>t.tier==='low');
   const jdRows = jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',source_platform:'websearch',source_url:j.url||''}));
+
+  storeResults(industry, role, talentRows, jdRows).catch(e => {});
+
+  // Generate report
+  const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
+  const reportHtml = await reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 20000);
+
+  send({step:'report_ready',progress:100,
+    report_html: reportHtml || '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成超时，请刷新重试。候选人数据已就绪。</p>',
+  });
 
   send({step:'data_ready',progress:65,
     talents:talentRows, jds:jdRows,
@@ -231,19 +226,23 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
 
 // ========== Report Generators ==========
 
-async function generateVPSummary(ai, talents, jds, industry, role) {
-  const highN = talents.filter(t=>t.tier==='high').length;
-  const midN = talents.filter(t=>t.tier==='mid').length;
-  const jdText = jds.slice(0,5).map(j=>j.snippet||'').join('\n').substring(0,1500);
-  const prompt = `${industry}·${role}人才地图VP摘要。高端${highN}人/中端${midN}人。核心发现+趋势+建议。HTML body,简洁,800字内。JD:${jdText}`;
-  return await ai.chat(prompt, 1000);
-}
-
 async function generateMacroHtml(ai, talents, jds, industry, role) {
-  const highT = talents.filter(t=>t.tier==='high').slice(0,5).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const jdText = jds.slice(0,6).map(j=>j.snippet||'').join('\n').substring(0,2000);
-  const prompt = `${industry}·${role}人才画像(VP级)。硬技能TOP8+薪酬对标+三档人才分层。高端:${highT}。JD:${jdText}。HTML body,简洁。`;
-  const html = await ai.chat(prompt, 2000);
+  const highT = talents.filter(t=>t.tier==='high').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
+  const midT = talents.filter(t=>t.tier==='mid').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
+  const jdText = jds.slice(0,10).map(j=>j.snippet||'').join('\n').substring(0,4000);
+  const prompt = `为${industry}行业的${role}岗位生成一份详细HTML人才画像报告。
+使用深色主题: 背景#10101c, 卡片背景rgba(255,255,255,.03), 边框rgba(255,255,255,.06), 文字#f5f5f5, 次要文字#a8a8a8, 强调色#f59e0b。
+包含以下板块(每个板块前标注数据来源[JD数据]或[候选人数据]):
+1. 市场JD分析: 共性要求, 趋势变化, 硬技能TOP10
+2. 候选人画像: 经验分布, 公司来源, 薪酬对标
+3. 高-中-低三档人才定义(附代表人物)
+4. 三档人才规律抽取: 专业/经验/能力的差异
+5. VP建议: 招聘策略+时间线+风险提示
+
+高端候选人: ${highT}
+中端候选人: ${midT}
+JD数据: ${jdText}`;
+  const html = await ai.chat(prompt, 3000);
   let t = html.trim();
   if (t.startsWith('```html')) t = t.split('\n').slice(1).join('\n');
   if (t.endsWith('```')) t = t.slice(0,-3);
