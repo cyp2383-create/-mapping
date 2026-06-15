@@ -205,8 +205,12 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
 额外候选人: ${JSON.stringify(extraTalents.slice(0,5))}`, 3000);
 
   let reportHtml = targetReport.trim();
+  const tagStart = reportHtml.indexOf('<');
+  if (tagStart > 0) reportHtml = reportHtml.substring(tagStart);
   if (reportHtml.startsWith('```html')) reportHtml = reportHtml.split('\n').slice(1).join('\n');
+  if (reportHtml.startsWith('```')) reportHtml = reportHtml.split('\n').slice(1).join('\n');
   if (reportHtml.endsWith('```')) reportHtml = reportHtml.slice(0,-3);
+  reportHtml = reportHtml.trim();
 
   const talentRows = extraTalents.map(t => {
     const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
@@ -243,9 +247,12 @@ async function generateMacroHtml(ai, talents, jds, industry, role) {
 JD数据: ${jdText}`;
   const html = await ai.chat(prompt, 3000);
   let t = html.trim();
+  const tagStart = t.indexOf('<');
+  if (tagStart > 0) t = t.substring(tagStart);
   if (t.startsWith('```html')) t = t.split('\n').slice(1).join('\n');
+  if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n');
   if (t.endsWith('```')) t = t.slice(0,-3);
-  return t;
+  return t.trim();
 }
 
 async function generateQuestions(ai, talents, jds, industry, role) {

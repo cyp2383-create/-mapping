@@ -75,10 +75,14 @@ JD: ${jText}`;
       }
     }
 
-    // Clean and send final
+    // Clean: strip any text before first HTML tag, remove code fences
     let html = fullText.trim();
+    const tagStart = html.indexOf('<');
+    if (tagStart > 0) html = html.substring(tagStart);
     if (html.startsWith('```html')) html = html.split('\n').slice(1).join('\n');
+    if (html.startsWith('```')) html = html.split('\n').slice(1).join('\n');
     if (html.endsWith('```')) html = html.slice(0,-3);
+    html = html.trim();
     send({step:'done', report_html: html, chars: html.length});
     res.end();
   } catch(e) {
