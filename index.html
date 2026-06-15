@@ -105,7 +105,7 @@ tr:hover td{background:var(--surface-hover)}
     <button class="tab" onclick="switchTab('jds')">招聘JD</button>
     <button class="tab" onclick="switchTab('chat')">追问</button>
   </div>
-  <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>联系</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-chat">
     <div class="chat-panel" id="chatMessages"></div>
@@ -173,7 +173,7 @@ function showResults(data){
   else{rb.textContent='报告生成中...';rb.style.color='var(--text-secondary)';}
   // Talents table
   const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
-  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class=\"badge badge-green\">高</span>':t.tier==='mid'?'<span class=\"badge badge-yellow\">中</span>':'<span class=\"badge badge-purple\">低</span>';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td>${t.contact_type||''}</td><td><span class=\"badge badge-yellow\">${t.source_platform||''}</span></td></tr>`;});
+  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class=\"badge badge-green\">高</span>':t.tier==='mid'?'<span class=\"badge badge-yellow\">中</span>':'<span class=\"badge badge-purple\">低</span>';const infScore=t.influence_score?('⭐'.repeat(Math.min(5,Math.round(t.influence_score/2)))):'';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td style=\"font-size:11px\">${t.education||''}</td><td style=\"font-size:11px\">${t.languages||''}</td><td>${infScore}</td><td>${t.contact_type||''}</td></tr>`;});
   // JDs table
   const jbody=document.querySelector('#jdTable tbody');jbody.innerHTML='';
   (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td><span class=\"badge badge-green\">${j.source_platform||''}</span></td></tr>`;});

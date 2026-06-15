@@ -102,29 +102,44 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
   send({step:'talents',text:`找到${talents.length}位候选人`,progress:55});
 
-  // Parse and classify talents
-  const talentRows = talents.slice(0,40).map(t => {
+  // Deep enrichment: extract hidden fields from snippets
+  send({step:'enrich',text:'深度提取候选人档案...',progress:58});
+  const enrichedT = await deepExtractTalents(ai, talents.slice(0,25));
+  const enrichedJ = await deepExtractJDs(ai, jds.slice(0,15));
+
+  // Parse and classify talents with enriched data
+  const talentRows = talents.slice(0,40).map((t, i) => {
     const raw = t.title||'';
-    // Try multiple parsing strategies for LinkedIn titles
     let name='', current_title='';
     const dashParts = raw.split(' - ').map(s=>s.trim());
     if (dashParts.length >= 2) { name = dashParts[0]; current_title = dashParts[1]; }
     else {
-      // Try extracting name from LinkedIn URL
       const urlMatch = (t.url||'').match(/linkedin\.com\/in\/([^/]+)/);
       if (urlMatch) { name = urlMatch[1].replace(/-/g,' ').replace(/[0-9]/g,'').trim(); }
       else { name = raw.substring(0,30); }
     }
-    const current_company = t.company||dashParts[2]||'';
-    return {name:name||raw.substring(0,25),current_title:current_title||'',current_company,
-      city:'',skills:'',source_platform:'linkedin',source_url:t.url||'',
-      contact_type:t.url?'linkedin':'none',contact_value:t.url||'',confidence:.8,
-      level: extractLevel(current_title),
-      tier: classifyTier(current_company, current_title)
+    const e = enrichedT[i] || {};
+    return {
+      name:name||raw.substring(0,25), current_title:current_title||'',
+      current_company:t.company||dashParts[2]||'',
+      source_platform:'linkedin', source_url:t.url||'',
+      contact_type:t.url?'linkedin':'none', contact_value:t.url||'', confidence:.8,
+      level: extractLevel(current_title), tier: classifyTier(t.company||'', current_title),
+      education:e.education||'', languages:e.languages||'',
+      certifications:e.certifications||'', influence_score:e.influence_score||0,
+      location:e.location||'',
     };
   });
 
-  const jdRows = jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',source_platform:'websearch',source_url:j.url||''}));
+  const jdRows = jds.slice(0,30).map((j, i) => {
+    const e = enrichedJ[i] || {};
+    return {
+      title:j.title||'', company:j.company||'',
+      salary:e.salary||'', experience:e.experience||'',
+      education_req:e.education_req||'', tools:e.tools||'',
+      source_platform:'websearch', source_url:j.url||'',
+    };
+  });
   const highTier = talentRows.filter(t=>t.tier==='high');
   const midTier = talentRows.filter(t=>t.tier==='mid');
   const lowTier = talentRows.filter(t=>t.tier==='low');
@@ -318,6 +333,33 @@ function turso() {
 async function initTables() {
   const db = turso();
   await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, talent_data TEXT, jd_data TEXT, created_at TEXT DEFAULT (datetime()))");
+}
+
+// ===== DeepSeek batch enrichment =====
+
+async function deepExtractTalents(ai, talents) {
+  const text = talents.slice(0,25).map((t,i) => `[${i}] ${t.snippet||''}`).join('\n---\n');
+  const prompt = `Extract hidden fields from LinkedIn profile snippets. Return JSON array, one object per profile:
+[{"education":"school+degree","languages":"lang1,lang2","certifications":"cert1,cert2","influence_score":0-10,"location":"city,country"}]
+influence_score: 500+ connections=7, 1000+ followers=8, 2000+=9, 5000+=10. If no data, use empty string.
+Profiles:\n${text.substring(0,6000)}`;
+  const result = await ai.chat(prompt, 2000);
+  try {
+    let t = result.trim(); if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n'); if (t.endsWith('```')) t = t.slice(0,-3);
+    return JSON.parse(t);
+  } catch { return []; }
+}
+
+async function deepExtractJDs(ai, jds) {
+  const text = jds.slice(0,15).map((j,i) => `[${i}] ${j.snippet||''}`).join('\n---\n');
+  const prompt = `Extract structured fields from job description snippets. Return JSON array:
+[{"salary":"range if mentioned","experience":"e.g. 3-5 years","education_req":"e.g. Bachelor","tools":"tool1,tool2"}]
+If field not found, use empty string. JDs:\n${text.substring(0,6000)}`;
+  const result = await ai.chat(prompt, 1500);
+  try {
+    let t = result.trim(); if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n'); if (t.endsWith('```')) t = t.slice(0,-3);
+    return JSON.parse(t);
+  } catch { return []; }
 }
 
 async function storeResults(industry, role, talentRows, jdRows) {
