@@ -57,35 +57,32 @@ function createTavily() {
 
 // ========== Tier Classification ==========
 
-function classifyTier(companyName, salaryStr, titleStr) {
+function classifyTier(companyName, titleStr) {
   const tier1 = ['字节跳动','阿里巴巴','腾讯','百度','美团','华为','OpenAI','Google','Microsoft','Meta','Apple','Amazon','NVIDIA'];
   const tier2 = ['快手','小红书','京东','网易','拼多多','滴滴','小米','商汤','科大讯飞','DeepSeek','智谱','月之暗面','MiniMax','百川','零一万物'];
-  const isTier1 = tier1.some(c => companyName.includes(c));
-  const isTier2 = tier2.some(c => companyName.includes(c));
+  const isTier1 = tier1.some(c => (companyName||'').includes(c));
+  const isTier2 = tier2.some(c => (companyName||'').includes(c));
 
-  // Salary heuristic
-  let salaryLevel = 1;
-  const s = (salaryStr||'').toLowerCase();
-  if (/\d+k/.test(s)) {
-    const num = parseInt(s.match(/\d+/)?.[0]||'0');
-    if (num >= 60) salaryLevel = 3;
-    else if (num >= 30) salaryLevel = 2;
-  }
-  if (/万/.test(s) && /\d+/.test(s)) {
-    const num = parseInt(s.match(/\d+/)?.[0]||'0');
-    if (num >= 60) salaryLevel = 3;
-    else if (num >= 30) salaryLevel = 2;
-  }
-
-  // Title heuristic
   let titleLevel = 1;
-  if (/总监|VP|副总裁|负责人|head|director|principal/i.test(titleStr||'')) titleLevel = 3;
-  else if (/经理|专家|senior|lead|manager/i.test(titleStr||'')) titleLevel = 2;
+  const t = (titleStr||'').toLowerCase();
+  if (/总监|vp|副总裁|负责人|head|director|principal|partner|首席/.test(t)) titleLevel = 3;
+  else if (/经理|专家|senior|lead|manager|architect|资深/.test(t)) titleLevel = 2;
 
-  const score = (isTier1?3:isTier2?2:1) + salaryLevel + titleLevel;
-  if (score >= 7) return 'high';
-  if (score >= 4) return 'mid';
+  const companyScore = isTier1 ? 3 : isTier2 ? 2 : 1;
+  const score = companyScore + titleLevel;
+  if (score >= 5) return 'high';
+  if (score >= 3) return 'mid';
   return 'low';
+}
+
+function extractLevel(titleStr) {
+  const t = (titleStr||'');
+  if (/总监|VP|副总裁|负责人|Head|Director|Principal|首席/.test(t)) return '总监/VP级';
+  if (/经理|Manager|Lead/.test(t) && /高级|资深|Senior|Staff/.test(t)) return '高级经理';
+  if (/经理|Manager/.test(t)) return '经理';
+  if (/专家|Architect|Fellow/.test(t)) return '专家';
+  if (/专员|助理|Associate|Junior/.test(t)) return '专员/初级';
+  return '其他';
 }
 
 // ========== STEP 1: 宏观市场报告 ==========
@@ -122,7 +119,8 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     return {name:name||raw.substring(0,25),current_title:current_title||'',current_company,
       city:'',skills:'',source_platform:'linkedin',source_url:t.url||'',
       contact_type:t.url?'linkedin':'none',contact_value:t.url||'',confidence:.8,
-      tier: classifyTier(current_company, '', current_title)
+      level: extractLevel(current_title),
+      tier: classifyTier(current_company, current_title)
     };
   });
 
@@ -216,7 +214,7 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
     const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
     return {name:parts[0]||raw.substring(0,30),current_title:parts[1]||'',
       current_company:t.company||parts[2]||'',source_platform:'linkedin',
-      source_url:t.url||'',tier: classifyTier(t.company||'', '', parts[1]||'')};
+      source_url:t.url||'',tier: classifyTier(t.company||'', parts[1]||''),level:extractLevel(parts[1]||'')};
   });
 
   send({step:'done',progress:100,
@@ -233,14 +231,17 @@ async function generateMacroHtml(ai, talents, jds, industry, role) {
   const highT = talents.filter(t=>t.tier==='high').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
   const midT = talents.filter(t=>t.tier==='mid').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
   const jdText = jds.slice(0,10).map(j=>j.snippet||'').join('\n').substring(0,4000);
-  const prompt = `为${industry}行业的${role}岗位生成一份详细HTML人才画像报告。
-使用深色主题: 背景#10101c, 卡片背景rgba(255,255,255,.03), 边框rgba(255,255,255,.06), 文字#f5f5f5, 次要文字#a8a8a8, 强调色#f59e0b。
-包含以下板块(每个板块前标注数据来源[JD数据]或[候选人数据]):
-1. 市场JD分析: 共性要求, 趋势变化, 硬技能TOP10
-2. 候选人画像: 经验分布, 公司来源, 薪酬对标
-3. 高-中-低三档人才定义(附代表人物)
-4. 三档人才规律抽取: 专业/经验/能力的差异
-5. VP建议: 招聘策略+时间线+风险提示
+  const prompt = `为${industry}行业的${role}岗位生成一份咨询级HTML人才地图报告。
+深色主题: 背景#10101c, 卡片rgba(255,255,255,.03), 文字#f5f5f5, 强调色#f59e0b。
+
+=== 数据整理 [标注来源] ===
+1. 市场JD分析: 硬技能TOP10频次, 学历/经验门槛, 共性要求
+2. 候选人画像: 公司分布, 职级统计, 典型背景
+
+=== 推理分析 [标注洞察] ===
+3. 人才特征素描: 高端vs中端的分水岭(关键经历/能力差异, 不只是年限)
+4. 职业路径: 从什么角色晋升来, 下一步去哪
+5. 招聘策略: 优先挖哪些公司, 面试重点, 90天预期
 
 高端候选人: ${highT}
 中端候选人: ${midT}

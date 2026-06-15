@@ -32,17 +32,23 @@ export default async function handler(req, res) {
     const tText = talents.slice(0,15).map(t => `${t.name||'?'}|${t.current_company||''}|${t.current_title||''}`).join('\n');
     const jText = jds.slice(0,15).map(j => `${j.title||''}|${j.company||''}`).join('\n');
 
-    const prompt = `为${industry}行业的${role}岗位生成详细HTML人才画像报告。
+    const prompt = `为${industry}行业的${role}岗位生成一份咨询级HTML人才地图报告。
 深色主题: 背景#10101c, 卡片rgba(255,255,255,.03), 文字#f5f5f5, 强调色#f59e0b。
-5个板块(标注[JD数据]或[候选人数据]):
-1. 市场JD分析: 共性要求, 硬技能TOP10
-2. 候选人画像: 公司/职级分布, 薪酬对标
-3. 高-中-低三档定义(附代表人物)
-4. 三档规律抽取: 专业/经验/能力的差异
-5. VP建议: 招聘策略+时间线+风险
 
-候选人: ${tText}
-JD: ${jText}`;
+报告分两大部分:
+=== 第一部分: 数据整理总结 [标注数据来源] ===
+1. 市场JD分析: 共性要求统计, 硬技能TOP10出现频次, 学历/经验门槛分布
+2. 候选人画像: 公司来源分布, 职级统计, 典型背景特征
+3. 薪酬对标: 按级别给出市场薪酬区间估算[AI推理,基于行业经验]
+
+=== 第二部分: 推理分析 [标注为分析洞察] ===
+4. 高端vs中端候选人的分水岭: 不是年限, 而是哪些关键经历/能力?
+5. 典型职业路径: 这个岗位的人通常从什么角色晋升而来, 下一步去向哪里
+6. 人才特征素描: 高/中/低三档人才在专业深度、业务理解、管理能力的差异
+7. 招聘策略建议: 优先挖哪些公司, 面试关注什么, 入职后90天预期
+
+候选人数据: ${tText}
+JD数据: ${jText}`;
 
     // Stream from DeepSeek
     const aiResp = await fetch('https://api.deepseek.com/v1/chat/completions', {
