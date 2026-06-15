@@ -302,16 +302,15 @@ function turso() {
 
 async function initTables() {
   const db = turso();
-  await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, created_at TEXT DEFAULT (datetime()))");
-  await db.execute("CREATE TABLE IF NOT EXISTS talents (id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER, name TEXT, current_company TEXT, current_title TEXT, city TEXT, skills TEXT, tier TEXT, source_platform TEXT, source_url TEXT, confidence REAL DEFAULT 0.5)");
-  await db.execute("CREATE TABLE IF NOT EXISTS jds (id INTEGER PRIMARY KEY AUTOINCREMENT, position_id INTEGER, title TEXT, company TEXT, salary TEXT, location TEXT, experience TEXT, education TEXT, skills TEXT, source_platform TEXT, source_url TEXT)");
+  await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, talent_data TEXT, jd_data TEXT, created_at TEXT DEFAULT (datetime()))");
 }
 
 async function storeResults(industry, role, talents, jds) {
-  // Only store position metadata (Turso SQL embedding can't handle complex data reliably)
   const db = turso();
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
-  const ind = industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)||'industry';
+  const ind = industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)||'ind';
   const rd = role.replace(/[^\x00-\x7F]/g,'').substring(0,30)||'role';
-  await db.execute("INSERT INTO positions (name, industry, role_direction) VALUES ('"+pname+"','"+ind+"','"+rd+"')");
+  const tjson = JSON.stringify(talents.slice(0,40));
+  const jjson = JSON.stringify(jds.slice(0,30));
+  await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data) VALUES ('"+pname+"','"+ind+"','"+rd+"','"+tjson.replace(/'/g,'')+"','"+jjson.replace(/'/g,'')+"')");
 }

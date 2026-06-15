@@ -34,17 +34,14 @@ export default async function handler(req, res) {
   }
 
   if (position_id) {
-    const t = await query("SELECT id, name, current_title, current_company, city, skills, source_platform, source_url, confidence FROM talents WHERE position_id=? LIMIT 100", [position_id]);
-    const j = await query("SELECT id, title, company, salary, location, experience, source_platform, source_url FROM jds WHERE position_id=? LIMIT 100", [position_id]);
-    const mapRows = (rows, cols) => rows.map(row => {
-      const obj = {};
-      cols.forEach((c,i) => { try { obj[c] = row[i]?.value; } catch {} });
-      return obj;
-    });
-    res.json({
-      talents: t.rows ? mapRows(t.rows, t.cols) : [],
-      jds: j.rows ? mapRows(j.rows, j.cols) : []
-    });
+    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, jd_data, created_at FROM positions WHERE id=?", [position_id]);
+    if (!rows.length) return res.json({ talents: [], jds: [] });
+    const obj = {};
+    cols.forEach((c,i) => { try { obj[c] = rows[0][i]?.value; } catch {} });
+    let talents=[], jds=[];
+    try { talents = JSON.parse(obj.talent_data||'[]'); } catch {}
+    try { jds = JSON.parse(obj.jd_data||'[]'); } catch {}
+    res.json({ talents, jds, report_html:'', vp_summary:'' });
     return;
   }
 
