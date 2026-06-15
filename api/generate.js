@@ -308,17 +308,10 @@ async function initTables() {
 }
 
 async function storeResults(industry, role, talents, jds) {
+  // Only store position metadata (Turso SQL embedding can't handle complex data reliably)
   const db = turso();
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
-  await db.execute("INSERT INTO positions (name, industry, role_direction) VALUES ('"+pname+"','"+industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"')");
-  const pos = await db.execute("SELECT last_insert_rowid() as id");
-  const pid = pos.rows?.[0]?.[0]?.value || pos.rows?.[0]?.[0] || 1;
-  for (const t of talents.slice(0,30)) {
-    const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
-    const name = (parts[0]||raw).substring(0,50).replace(/'/g,'');
-    await db.execute("INSERT INTO talents (position_id, name, current_title, current_company, tier, source_platform, source_url, confidence) VALUES ('"+pid+"','"+name+"','"+(parts[1]||'').replace(/'/g,'').substring(0,50)+"','"+(t.company||'').replace(/'/g,'').substring(0,50)+"','"+classifyTier(t.company||'','',parts[1]||'')+"','linkedin','"+(t.url||'').replace(/'/g,'')+"',0.8)");
-  }
-  for (const j of jds.slice(0,30)) {
-    await db.execute("INSERT INTO jds (position_id, title, company, source_platform, source_url) VALUES ('"+pid+"','"+(j.title||'').replace(/'/g,'').substring(0,80)+"','"+(j.company||'').replace(/'/g,'').substring(0,40)+"','websearch','"+(j.url||'').replace(/'/g,'')+"')");
-  }
+  const ind = industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)||'industry';
+  const rd = role.replace(/[^\x00-\x7F]/g,'').substring(0,30)||'role';
+  await db.execute("INSERT INTO positions (name, industry, role_direction) VALUES ('"+pname+"','"+ind+"','"+rd+"')");
 }
