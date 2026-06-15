@@ -126,8 +126,8 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     };
   });
 
-  // Store results (best-effort, don't block)
-  storeResults(industry, role, talents, jds).catch(e => console.log('store error:', e.message));
+  // Store results after parsing
+  storeResults(industry, role, talentRows, jdRows).catch(e => console.log('store error:', e.message));
 
   // Generate reports in parallel with timeout
   const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
@@ -314,12 +314,12 @@ async function initTables() {
   await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, talent_data TEXT, jd_data TEXT, created_at TEXT DEFAULT (datetime()))");
 }
 
-async function storeResults(industry, role, talents, jds) {
+async function storeResults(industry, role, talentRows, jdRows) {
   const db = turso();
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
-  const ind = industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)||'ind';
-  const rd = role.replace(/[^\x00-\x7F]/g,'').substring(0,30)||'role';
-  const tjson = JSON.stringify(talents.slice(0,40));
-  const jjson = JSON.stringify(jds.slice(0,30));
-  await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data) VALUES ('"+pname+"','"+ind+"','"+rd+"','"+tjson.replace(/'/g,'')+"','"+jjson.replace(/'/g,'')+"')");
+  const tjson = JSON.stringify(talentRows.slice(0,40));
+  const jjson = JSON.stringify(jdRows.slice(0,30));
+  await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data) VALUES ('"+pname+"','"+
+    industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+
+    tjson.replace(/'/g,'')+"','"+jjson.replace(/'/g,'')+"')");
 }
