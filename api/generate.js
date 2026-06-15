@@ -105,13 +105,22 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
   send({step:'talents',text:`找到${talents.length}位候选人`,progress:55});
 
-  // Parse and classify talents immediately
+  // Parse and classify talents
   const talentRows = talents.slice(0,40).map(t => {
-    const raw = t.title||''; const parts = raw.split(' - ').map(s=>s.trim());
-    const name = parts[0]||raw.substring(0,30);
-    const current_title = parts[1]||'';
-    const current_company = t.company||parts[2]||'';
-    return {name,current_title,current_company,city:'',skills:'',source_platform:'linkedin',source_url:t.url||'',
+    const raw = t.title||'';
+    // Try multiple parsing strategies for LinkedIn titles
+    let name='', current_title='';
+    const dashParts = raw.split(' - ').map(s=>s.trim());
+    if (dashParts.length >= 2) { name = dashParts[0]; current_title = dashParts[1]; }
+    else {
+      // Try extracting name from LinkedIn URL
+      const urlMatch = (t.url||'').match(/linkedin\.com\/in\/([^/]+)/);
+      if (urlMatch) { name = urlMatch[1].replace(/-/g,' ').replace(/[0-9]/g,'').trim(); }
+      else { name = raw.substring(0,30); }
+    }
+    const current_company = t.company||dashParts[2]||'';
+    return {name:name||raw.substring(0,25),current_title:current_title||'',current_company,
+      city:'',skills:'',source_platform:'linkedin',source_url:t.url||'',
       contact_type:t.url?'linkedin':'none',contact_value:t.url||'',confidence:.8,
       tier: classifyTier(current_company, '', current_title)
     };

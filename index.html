@@ -255,12 +255,8 @@ tr:hover td { background: var(--surface-hover); }
     <button class="tab" onclick="switchTab('chat')">追问</button>
   </div>
   <div class="tab-content active" id="tab-report">
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <button class="btn btn-primary btn-sm active" id="btnFullRpt" onclick="switchReportView('full')" style="font-size:12px">完整报告</button>
-      <button class="btn btn-ghost btn-sm" id="btnVpSum" onclick="switchReportView('vp')" style="font-size:12px">VP摘要(1页)</button>
-    </div>
     <div class="report-frame" id="reportContent"></div>
-    <div class="report-frame" id="vpSummaryContent" style="display:none"></div>
+    <div style="margin-top:12px"><button class="btn btn-primary btn-sm" id="btnOpenReport" onclick="openReport()" style="font-size:12px;display:none">在新窗口打开完整报告</button></div>
     <div class="suggestions" id="suggestedQuestions"></div>
     <!-- Step 2: Structured follow-up -->
     <div id="step2Panel" style="margin-top:20px;padding:20px;background:rgba(255,255,255,.03);border-radius:var(--r-sm);border:1px solid var(--border);display:none">
@@ -340,8 +336,7 @@ function showResults(data){
   document.getElementById('results').style.display='';
   document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>${data.tier_stats?`<div class="stat-card"><div class="stat-num" style="color:#10b981">${data.tier_stats.high}</div><div class="stat-lbl">高端</div></div><div class="stat-card"><div class="stat-num" style="color:#f59e0b">${data.tier_stats.mid}</div><div class="stat-lbl">中端</div></div><div class="stat-card"><div class="stat-num" style="color:#ef4444">${data.tier_stats.low}</div><div class="stat-lbl">低端</div></div>`:''}`;
   document.getElementById('reportContent').innerHTML=data.report_html||'<div class="empty">报告生成中...</div>';
-  if(data.vp_summary){document.getElementById('vpSummaryContent').innerHTML=data.vp_summary;}
-  switchReportView('full');
+  if(data.report_html&&data.report_html.length>200){document.getElementById('btnOpenReport').style.display='';}
   const qDiv=document.getElementById('suggestedQuestions');
   if(data.questions?.length){qDiv.innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">追问建议:</span>'+data.questions.map(q=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${q}')">${q}</button>`).join('');}else{qDiv.innerHTML='';}
   // Show step 2 panel if stage 1
@@ -353,11 +348,11 @@ function showResults(data){
   switchTab('report');loadHistory();
 }
 
-function switchReportView(view){
-  document.getElementById('btnFullRpt').className = view==='full'?'btn btn-primary btn-sm active':'btn btn-ghost btn-sm';
-  document.getElementById('btnVpSum').className = view==='vp'?'btn btn-primary btn-sm active':'btn btn-ghost btn-sm';
-  document.getElementById('reportContent').style.display = view==='full'?'':'none';
-  document.getElementById('vpSummaryContent').style.display = view==='vp'?'':'none';
+function openReport(){
+  if(!currentData||!currentData.report_html) return;
+  const w=window.open('','_blank');
+  w.document.write(currentData.report_html);
+  w.document.close();
 }
 
 async function generateStage2(){
