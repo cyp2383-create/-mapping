@@ -126,21 +126,12 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     };
   });
 
+  const jdRows = jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',source_platform:'websearch',source_url:j.url||''}));
   const highTier = talentRows.filter(t=>t.tier==='high');
   const midTier = talentRows.filter(t=>t.tier==='mid');
   const lowTier = talentRows.filter(t=>t.tier==='low');
-  const jdRows = jds.slice(0,30).map(j=>({title:j.title||'',company:j.company||'',source_platform:'websearch',source_url:j.url||''}));
 
-  storeResults(industry, role, talentRows, jdRows).catch(e => {});
-
-  // Generate report
-  const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
-  const reportHtml = await reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 20000);
-
-  send({step:'report_ready',progress:100,
-    report_html: reportHtml || '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成超时，请刷新重试。候选人数据已就绪。</p>',
-  });
-
+  // PHASE 1: Return data immediately
   send({step:'data_ready',progress:65,
     talents:talentRows, jds:jdRows,
     tier_stats:{high:highTier.length, mid:midTier.length, low:lowTier.length},
@@ -149,8 +140,16 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     stage:1
   });
 
-  // === PHASE 2: Generate reports (slower, don't block data) ===
-  send({step:'report',text:'正在生成报告，请稍候...',progress:70});
+  storeResults(industry, role, talentRows, jdRows).catch(e => {});
+
+  // PHASE 2: Generate report
+  send({step:'report',text:'正在生成报告...',progress:70});
+  const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
+  const reportHtml = await reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 25000);
+
+  send({step:'report_ready',progress:100,
+    report_html: reportHtml || '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成超时，请刷新重试。候选人数据已就绪。</p>',
+  });
 }
 
 // ========== STEP 2: 定向人才地图 ==========
