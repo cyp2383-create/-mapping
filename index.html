@@ -99,11 +99,11 @@ tr:hover td{background:var(--surface-hover)}
 <div class="card" id="results" style="display:none">
   <div class="stats" id="statsRow"></div>
   <div class="tabs">
+    <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:#f59e0b;font-weight:700">报告生成中...</button>
+    <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">从历史数据重新生成报告</button>
     <button class="tab active" onclick="switchTab('talents')">候选人</button>
     <button class="tab" onclick="switchTab('jds')">招聘JD</button>
     <button class="tab" onclick="switchTab('chat')">追问</button>
-    <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:#f59e0b;font-weight:700">报告生成中...</button>
-    <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">从历史数据重新生成报告</button>
   </div>
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>联系</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
