@@ -192,13 +192,23 @@ function switchTab(tab){
 function openReport(){if(currentData&&currentData.report_html){const w=window.open('','_blank');w.document.write(currentData.report_html);w.document.close()}}
 async function regenerateReport(){
   if(!currentData||!currentData._posId) return;
-  document.getElementById('btnRegenReport').textContent='生成中...';
+  const btn=document.getElementById('btnRegenReport'); btn.textContent='生成中...';
   try{
     const resp=await fetch('/api/regenerate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({position_id:currentData._posId})});
-    const d=await resp.json();
-    if(d.report_html){currentData.report_html=d.report_html;const rb=document.getElementById('btnOpenReport');rb.textContent='查看完整报告('+d.report_html.length+'字)';rb.style.color='#f59e0b';openReport();}
-    document.getElementById('btnRegenReport').textContent='从历史数据重新生成报告';
-  }catch(e){document.getElementById('btnRegenReport').textContent='生成失败,重试';}}
+    const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='';
+    while(true){
+      const{value,done}=await reader.read();if(done)break;
+      buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
+      for(const line of lines){if(!line.startsWith('data: '))continue;
+        try{const d=JSON.parse(line.slice(6));
+          if(d.step==='progress'){btn.textContent=d.text;}
+          else if(d.step==='done'){btn.textContent='报告完成!';currentData.report_html=d.report_html;const rb=document.getElementById('btnOpenReport');rb.textContent='查看完整报告('+d.chars+'字)';rb.style.color='#f59e0b';openReport();}
+          else if(d.error){btn.textContent='生成失败';}
+        }catch(e){}
+      }
+    }
+  }catch(e){btn.textContent='生成失败,重试';}
+}
 
 async function sendChat(){
   const input=document.getElementById('chatInput');const q=input.value.trim();if(!q||!currentData)return;input.value='';
