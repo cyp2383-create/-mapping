@@ -61,15 +61,14 @@ export default async function handler(req, res) {
     analysisHtml = analysisHtml.trim();
     if (analysisHtml.startsWith('```')) analysisHtml = analysisHtml.replace(/```html?/g,'').replace(/```/g,'');
 
-    // 4. Build final HTML report + save to Turso
+    // 4. Build final HTML report
     const report = buildReport(stats, analysisHtml, realIndustry, realRole);
+    // Save to Turso asynchronously (don't block response)
     const rjson = JSON.stringify(report);
-    try {
-      await fetch(process.env.TURSO_URL+'/v2/pipeline', {
-        method:'POST',headers:{'Authorization':'Bearer '+process.env.TURSO_TOKEN,'Content-Type':'application/json'},
-        body:JSON.stringify({requests:[{type:'execute',stmt:{sql:\"UPDATE positions SET report_html='\"+rjson.replace(/'/g,\"''\")+\"' WHERE id=\"+Number(position_id)}}]})
-      });
-    } catch(e) {}
+    fetch(process.env.TURSO_URL+'/v2/pipeline', {
+      method:'POST',headers:{'Authorization':'Bearer '+process.env.TURSO_TOKEN,'Content-Type':'application/json'},
+      body:JSON.stringify({requests:[{type:'execute',stmt:{sql:\"UPDATE positions SET report_html='\"+rjson.replace(/'/g,\"''\")+\"' WHERE id=\"+Number(position_id)}}]})
+    }).catch(e=>{});
     send({step:'done', report_html: report, chars: report.length});
     res.end();
   } catch(e) { send({error:e.message}); res.end(); }
