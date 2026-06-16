@@ -37,12 +37,12 @@ export default async function handler(req, res) {
 
     // 3. Call DeepSeek for experience-level analysis
     const tText = talentData.slice(0,15).map(t=>`${t.name||'?'}|${t.current_company||''}|${t.current_title||''}`).join('\n');
-    const analysisPrompt = `为${realIndustry}行业${realRole}岗位的4个经验阶段分别写120字以内的分析(HTML格式):
-校招生(0-1年): 需要什么技能, 典型项目举例
-1-3年: 需要什么技能, 典型项目举例
-3-5年: 需要什么技能, 典型项目举例
-5年以上: 需要什么技能, 典型项目举例
-每个阶段用<div class='level-card'><h3>标题</h3><p>内容</p></div>格式。候选人参考:${tText}`;
+    const analysisPrompt = `为${realIndustry}行业${realRole}岗位写4段短分析, 必须严格覆盖4个经验阶段:
+1. 校招生(0-1年): 需要什么技能, 典型项目举例(80字)
+2. 1-3年: 需要什么技能, 典型项目举例(80字)
+3. 3-5年: 需要什么技能, 典型项目举例(80字)
+4. 5年以上: 需要什么技能, 典型项目举例(80字)
+每个阶段用<div class='level-card'><h3>阶段名</h3><p>内容</p></div>格式。必须是4段。候选人参考:${tText}`;
 
     send({step:'progress',text:'AI分析经验阶段...',elapsed:1});
     let analysisHtml = '';
@@ -70,10 +70,20 @@ export default async function handler(req, res) {
 
 function computeStats(talents, jds) {
   const total = talents.length||1;
-  // Education
+  // Education - always have data
   const edu = {};
-  talents.forEach(t=>{ const e=t.education||''; if(e){const k=e.split('+')[0].substring(0,20);edu[k]=(edu[k]||0)+1;} });
-  const eduSorted = Object.entries(edu).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  talents.forEach(t=>{
+    const e=(t.education||'').trim();
+    if(e){const k=e.split('+')[0].substring(0,20);edu[k]=(edu[k]||0)+1;}
+  });
+  // Fallback: if no education data, use level distribution
+  let eduSorted=Object.entries(edu).sort((a,b)=>b[1]-a[1]);
+  if(!eduSorted.length){
+    const tmp={};
+    talents.forEach(t=>{const l=t.level||'其他';tmp[l]=(tmp[l]||0)+1;});
+    eduSorted=Object.entries(tmp).sort((a,b)=>b[1]-a[1]);
+  }
+  eduSorted=eduSorted.slice(0,5);
 
   // Experience levels from title + level field
   const exp = {校招生:0,'1-3年':0,'3-5年':0,'5年以上':0};
@@ -147,9 +157,9 @@ h2{font-size:18px;font-weight:600;margin:28px 0 16px;border-left:3px solid #f59e
 .pie-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;text-align:center}
 .pie-card h3{font-size:12px;font-weight:600;color:#a8a8a8;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
 .pie{width:100px;height:100px;border-radius:50%;margin:0 auto 12px;box-shadow:0 0 20px rgba(245,158,11,.1)}
-.pie.edu{background:${eduPie?`conic-gradient(${eduPie})`:'rgba(255,255,255,.05)'}}
-.pie.exp{background:${expPie?`conic-gradient(${expPie})`:'rgba(255,255,255,.05)'}}
-.pie.comp{background:${compPie?`conic-gradient(${compPie})`:'rgba(255,255,255,.05)'}}
+.pie.edu{background:conic-gradient(${eduPie||'#333 0% 100%'})}
+.pie.exp{background:conic-gradient(${expPie||'#333 0% 100%'})}
+.pie.comp{background:conic-gradient(${compPie||'#333 0% 100%'})}
 .legend{font-size:11px;color:#a8a8a8;text-align:left;margin-top:8px}
 .legend span{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
 /* Skills */
