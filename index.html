@@ -107,6 +107,7 @@ tr:hover td{background:var(--surface-hover)}
     <span style="flex:1"></span>
     <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">重新生成报告</button>
     <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:var(--text-secondary);font-weight:700">暂无报告</button>
+    <button class="tab" id="btnDownloadReport" onclick="downloadReport()" style="color:#10b981;font-weight:700;display:none">下载报告</button>
   </div>
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
@@ -158,7 +159,7 @@ function showResults(data){
   document.getElementById('results').style.display='';
   document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>${data.tier_stats?`<div class="stat-card"><div class="stat-num" style="color:#10b981">${data.tier_stats.high}</div><div class="stat-lbl">高端</div></div><div class="stat-card"><div class="stat-num" style="color:#f59e0b">${data.tier_stats.mid}</div><div class="stat-lbl">中端</div></div><div class="stat-card"><div class="stat-num" style="color:#ef4444">${data.tier_stats.low}</div><div class="stat-lbl">低端</div></div>`:''}`;
   const rb=document.getElementById('btnOpenReport');
-  if(data.report_html&&data.report_html.length>100){rb.textContent='查看完整报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';}else{rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';}
+  if(data.report_html&&data.report_html.length>100){rb.textContent='查看报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';document.getElementById('btnDownloadReport').style.display='';}else{rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';document.getElementById('btnDownloadReport').style.display='none';}
   const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
   (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class="badge badge-green">高</span>':t.tier==='mid'?'<span class="badge badge-yellow">中</span>':'<span class="badge badge-purple">低</span>';const infScore=t.influence_score?('⭐'.repeat(Math.min(5,Math.round(t.influence_score/2)))):'';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td style="font-size:11px">${t.education||''}</td><td style="font-size:11px">${t.languages||''}</td><td>${infScore}</td><td>${t.contact_type||''}</td></tr>`;});
   const jbody=document.querySelector('#jdTable tbody');jbody.innerHTML='';
@@ -176,6 +177,7 @@ function switchTab(tab){
   if(contentEl)contentEl.classList.add('active');
 }
 function openReport(){if(currentData&&currentData.report_html){const w=window.open('','_blank');w.document.write(currentData.report_html);w.document.close()}}
+function downloadReport(){if(!currentData||!currentData.report_html)return;const blob=new Blob([currentData.report_html],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='人才地图报告.html';a.click();}
 async function regenerateReport(){
   if(!currentData||!currentData._posId) return;
   const btn=document.getElementById('btnRegenReport');btn.textContent='生成中...';
@@ -185,7 +187,7 @@ async function regenerateReport(){
     while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;try{const d=JSON.parse(line.slice(6));
         if(d.step==='progress'){btn.textContent=d.text;}
-        else if(d.step==='done'){btn.textContent='完成!';currentData.report_html=d.report_html;const rb=document.getElementById('btnOpenReport');rb.textContent='查看完整报告('+d.chars+'字)';rb.style.color='#f59e0b';openReport();}
+        else if(d.step==='done'){btn.textContent='完成!';currentData.report_html=d.report_html;const rb=document.getElementById('btnOpenReport');rb.textContent='查看报告('+d.chars+'字)';rb.style.color='#f59e0b';document.getElementById('btnDownloadReport').style.display='';openReport();}
         else if(d.error){btn.textContent='生成失败';}
       }catch(e){}}}
   }catch(e){btn.textContent='生成失败';}
