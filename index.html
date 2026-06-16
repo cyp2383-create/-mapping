@@ -112,9 +112,9 @@ tr:hover td{background:var(--surface-hover)}
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-chat">
-    <div class="chat-panel" id="chatMessages"></div>
-    <div class="suggestions" id="suggestedQuestions"></div>
-    <div class="chat-input-row"><input id="chatInput" placeholder="描述您的招聘需求，获取智能推荐..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
+    <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot">你好！我已经分析了市场数据。你可以问我:<br>· 这些大厂在做什么业务方向？<br>· 我的业务场景适合从哪家公司挖人？<br>· 帮我分析各公司挖人的优劣势。</div></div>
+    <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速提问:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在做什么业务方向？')">大厂业务方向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('我的业务适合从哪挖人？')">推荐挖人公司</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('各公司挖人优劣势？')">挖人优劣势</button></div>
+    <div class="chat-input-row"><input id="chatInput" placeholder="描述您的业务场景，获取智能推荐..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
   </div>
 </div>
 
@@ -165,7 +165,7 @@ function showResults(data){
   const jbody=document.querySelector('#jdTable tbody');jbody.innerHTML='';
   (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td><span class="badge badge-green">${j.source_platform||''}</span></td></tr>`;});
   const qDiv=document.getElementById('suggestedQuestions');
-  if(data.questions?.length){qDiv.innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速追问:</span>'+data.questions.map(q=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${q}')">${q}</button>`).join('');}
+  if(data.questions?.length){qDiv.innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速提问:</span>'+data.questions.map(q=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${q}')">${q}</button>`).join('');}
   switchTab('talents');loadHistory();
 }
 function switchTab(tab){
