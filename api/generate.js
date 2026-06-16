@@ -374,9 +374,10 @@ If field not found, use empty string. JDs:\n${text.substring(0,6000)}`;
 
 async function storeResults(industry, role, talentRows, jdRows) {
   const db = turso();
-  const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
-  const tjson = JSON.stringify(talentRows.slice(0,40));
+  // Store real industry/role inside talent_data JSON (Turso TEXT garbles Chinese)
+  const tjson = JSON.stringify({_industry:industry, _role:role, data:talentRows.slice(0,40)});
   const jjson = JSON.stringify(jdRows.slice(0,30));
+  const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
   await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data) VALUES ('"+pname+"','"+
     industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+
     tjson.replace(/'/g,'')+"','"+jjson.replace(/'/g,'')+"')");

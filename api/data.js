@@ -38,8 +38,17 @@ export default async function handler(req, res) {
     if (!rows.length) return res.json({ talents: [], jds: [] });
     const obj = {};
     cols.forEach((c,i) => { try { obj[c] = rows[0][i]?.value; } catch {} });
-    let talents=[], jds=[];
-    try { talents = JSON.parse(obj.talent_data||'[]'); } catch {}
+    let talents=[], jds=[], industry='', role='';
+    try {
+      const raw = JSON.parse(obj.talent_data||'[]');
+      if (raw && raw._industry) {
+        industry = raw._industry;
+        role = raw._role || '';
+        talents = raw.data || raw;
+      } else {
+        talents = raw;
+      }
+    } catch {}
     try { jds = JSON.parse(obj.jd_data||'[]'); } catch {}
     // Convert raw Tavily format to parsed format if needed
     talents = talents.map(t => {
@@ -50,7 +59,7 @@ export default async function handler(req, res) {
       const name = parts[0] || (urlMatch ? urlMatch[1].replace(/-/g,' ').replace(/[0-9]/g,'').trim() : raw.substring(0,25));
       return {name:name||raw.substring(0,25), current_title:parts[1]||'', current_company:t.company||parts[2]||'', source_platform:'linkedin', source_url:t.url||'', contact_type:t.url?'linkedin':'none', contact_value:t.url||''};
     });
-    res.json({ talents, jds, report_html:'', vp_summary:'' });
+    res.json({ talents, jds, industry, role, report_html:'' });
     return;
   }
 
