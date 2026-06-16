@@ -145,7 +145,7 @@ async function startGenerate(){
       buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;showResults(d);}
+          if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot">你好！我已经分析了市场数据。你可以问我:<br>· 这些大厂在做什么业务方向？<br>· 我的业务场景适合从哪家公司挖人？<br>· 帮我分析各公司挖人的优劣势。</div>';showResults(d);}
           else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('btnOpenReport').textContent='生成中...'+d.chars+'字';}
           else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);}
           else if(d.step==='error'){alert(d.text);}
@@ -195,9 +195,13 @@ async function regenerateReport(){
   }catch(e){btn.textContent='生成失败';}
 }
 function askQuestion(q){document.getElementById('chatInput').value=q;switchTab('chat');sendChat()}
+function getChatKey(){return 'chat_'+((currentData&&currentData._posId)||'default');}
+function saveChat(){try{localStorage.setItem(getChatKey(),document.getElementById('chatMessages').innerHTML);}catch(e){}}
+function loadChat(){const k=getChatKey();const saved=localStorage.getItem(k);if(saved){document.getElementById('chatMessages').innerHTML=saved;document.getElementById('chatMessages').scrollTop=document.getElementById('chatMessages').scrollHeight;}}
+
 async function sendChat(){
   const input=document.getElementById('chatInput');const q=input.value.trim();if(!q||!currentData)return;input.value='';
-  const msgs=document.getElementById('chatMessages');msgs.innerHTML+=`<div class="chat-msg chat-user">${q}</div>`;
+  const msgs=document.getElementById('chatMessages');msgs.innerHTML+=`<div class="chat-msg chat-user">${q}</div>`;saveChat();
   try{
     const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData,industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim()})});
     const d=await resp.json();
@@ -205,7 +209,7 @@ async function sendChat(){
     if(d.recommendations?.length){
       extra='<div style="margin-top:8px;font-size:12px;color:#10b981">推荐候选人: '+d.recommendations.map(r=>`<span class="badge badge-green">${r.name}(${r.reason})</span>`).join(' ')+'</div>';
     }
-    let md=(d.answer||d.error||'').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/### (.+)/g,'<h4>$1</h4>').replace(/\n- /g,'\n· ');msgs.innerHTML+=`<div class="chat-msg chat-bot${d.recommendations?.length?' chat-recommend':''}">${md}${extra}</div>`;
+    let md=(d.answer||d.error||'').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/### (.+)/g,'<h4>$1</h4>').replace(/\n- /g,'\n· ');msgs.innerHTML+=`<div class="chat-msg chat-bot${d.recommendations?.length?' chat-recommend':''}">${md}${extra}</div>`;saveChat();
     if(d.suggestions?.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">继续追问:</span>'+d.suggestions.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
   }catch(e){}
   msgs.scrollTop=msgs.scrollHeight;
@@ -215,7 +219,7 @@ async function loadHistory(){
   try{const resp=await fetch('/api/data?list=true');if(!resp.ok)throw new Error('API');const d=await resp.json();const p=d.positions||[];if(!p.length){el.innerHTML='<div class="empty">暂无历史报告</div>';return;}
   const fmtDate=(d)=>d?d.substring(0,10):'';el.innerHTML=p.map(x=>`<div class="history-item"><div><span style="font-weight:600">报告 #${x.id}</span><span class="history-meta" style="margin-left:8px">${fmtDate(x.created_at)}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${x.id})">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
 }
-async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;showResults(data);document.getElementById('btnRegenReport').style.display='';}
+async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;showResults(data);document.getElementById('btnRegenReport').style.display='';loadChat();}
 loadHistory();
 </script>
 </body>
