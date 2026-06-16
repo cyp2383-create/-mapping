@@ -57,10 +57,12 @@ tr:hover td{background:var(--surface-hover)}
 .badge-green{background:rgba(16,185,129,.15);color:#6ee7b7}
 .badge-yellow{background:rgba(245,158,11,.15);color:#fcd34d}
 .badge-purple{background:rgba(139,92,246,.15);color:#c4b5fd}
-.chat-panel{max-height:360px;overflow-y:auto}
+.badge-blue{background:rgba(59,130,246,.15);color:#93c5fd}
+.chat-panel{max-height:400px;overflow-y:auto}
 .chat-msg{margin-bottom:12px;padding:12px 16px;border-radius:12px;font-size:14px;max-width:85%;line-height:1.5}
-.chat-user{background:linear-gradient(135deg,#f59e0b,#d97706);color:#0a0a0a;margin-left:auto;font-weight:500}
-.chat-bot{background:var(--surface);border:1px solid var(--border);margin-right:auto}
+.chat-user{background:linear-gradient(135deg,#f59e0b,#d97706);color:#0a0a0a;margin-left:auto;font-weight:500;border-bottom-right-radius:4px}
+.chat-bot{background:var(--surface);border:1px solid var(--border);margin-right:auto;border-bottom-left-radius:4px}
+.chat-recommend{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2)}
 .chat-input-row{display:flex;gap:8px;margin-top:12px}
 .chat-input-row input{flex:1;padding:12px 16px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:14px;font-family:inherit;outline:none;background:rgba(255,255,255,.04);color:var(--text)}
 .chat-input-row input:focus{border-color:var(--accent)}
@@ -111,22 +113,7 @@ tr:hover td{background:var(--surface-hover)}
   <div class="tab-content" id="tab-chat">
     <div class="chat-panel" id="chatMessages"></div>
     <div class="suggestions" id="suggestedQuestions"></div>
-    <div class="chat-input-row"><input id="chatInput" placeholder="追问" onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
-    <div id="step2Panel" style="margin-top:20px;padding:20px;background:rgba(255,255,255,.03);border-radius:var(--r-sm);border:1px solid var(--border);display:none">
-      <div style="font-size:14px;font-weight:600;margin-bottom:12px">定向候选人画像 · 快速追问</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('搭建0-1的AI产品团队','带5人团队,汇报给CTO','年薪60-80W,P0紧急')">快速搭建AI团队</button>
-        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('现有产品AI化升级','独立贡献者或2-3人小组','年薪40-60W,P1')">产品AI化升级</button>
-        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('替代离职的AI产品负责人','接管10人团队','年薪80-120W,P0一周内')">紧急替补高管</button>
-        <button class="btn btn-ghost btn-sm" onclick="fillAndGo('探索AI新业务方向','从0开始搭建','年薪50-70W,P2')">探索新业务</button>
-      </div>
-      <div style="display:grid;gap:12px">
-        <div class="input-group"><label>招这个人要解决什么核心问题？</label><input id="ctx_problem" placeholder="例如: 搭建0-1的大模型产品团队"></div>
-        <div class="input-group"><label>团队规模和汇报关系？</label><input id="ctx_team" placeholder="例如: 带5人团队, 直接汇报给CTO"></div>
-        <div class="input-group"><label>预算范围？紧急程度？</label><input id="ctx_budget" placeholder="例如: 年薪60-80W, P0紧急, 1个月内到位"></div>
-      </div>
-      <button class="btn btn-primary" style="margin-top:12px" onclick="generateStage2()">生成定向人才地图</button>
-    </div>
+    <div class="chat-input-row"><input id="chatInput" placeholder="描述您的招聘需求，获取智能推荐..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
   </div>
 </div>
 
@@ -142,8 +129,8 @@ let currentData=null;
 async function startGenerate(){
   const industry=document.getElementById('industry').value.trim(),role=document.getElementById('role').value.trim();
   if(!industry||!role) return;
-  const btn=document.getElementById('btnGen');btn.disabled=true;
-  const prog=document.getElementById('progress');prog.classList.add('active');
+  const b=document.getElementById('btnGen');b.disabled=true;
+  const p=document.getElementById('progress');p.classList.add('active');
   document.getElementById('btnOpenReport').textContent='报告生成中...';
   document.getElementById('btnOpenReport').style.color='var(--text-secondary)';
   updateProgress(5,'连接中...');
@@ -164,79 +151,62 @@ async function startGenerate(){
       }
     }
   }catch(e){alert('生成失败');}
-  setTimeout(()=>{prog.classList.remove('active');btn.disabled=false},500);
+  setTimeout(()=>{p.classList.remove('active');b.disabled=false},500);
 }
 function updateProgress(pct,text){document.getElementById('progressFill').style.width=pct+'%';document.getElementById('progressText').textContent=text;}
 function showResults(data){
   document.getElementById('results').style.display='';
   document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>${data.tier_stats?`<div class="stat-card"><div class="stat-num" style="color:#10b981">${data.tier_stats.high}</div><div class="stat-lbl">高端</div></div><div class="stat-card"><div class="stat-num" style="color:#f59e0b">${data.tier_stats.mid}</div><div class="stat-lbl">中端</div></div><div class="stat-card"><div class="stat-num" style="color:#ef4444">${data.tier_stats.low}</div><div class="stat-lbl">低端</div></div>`:''}`;
-  // Report button: show status based on data
   const rb=document.getElementById('btnOpenReport');
-  if(data.report_html&&data.report_html.length>100){
-    rb.textContent='查看完整报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';
-  }else{
-    rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';
-  }
-  // Talents table
+  if(data.report_html&&data.report_html.length>100){rb.textContent='查看完整报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';}else{rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';}
   const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
-  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class=\"badge badge-green\">高</span>':t.tier==='mid'?'<span class=\"badge badge-yellow\">中</span>':'<span class=\"badge badge-purple\">低</span>';const infScore=t.influence_score?('⭐'.repeat(Math.min(5,Math.round(t.influence_score/2)))):'';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td style=\"font-size:11px\">${t.education||''}</td><td style=\"font-size:11px\">${t.languages||''}</td><td>${infScore}</td><td>${t.contact_type||''}</td></tr>`;});
-  // JDs table
+  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class="badge badge-green">高</span>':t.tier==='mid'?'<span class="badge badge-yellow">中</span>':'<span class="badge badge-purple">低</span>';const infScore=t.influence_score?('⭐'.repeat(Math.min(5,Math.round(t.influence_score/2)))):'';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td style="font-size:11px">${t.education||''}</td><td style="font-size:11px">${t.languages||''}</td><td>${infScore}</td><td>${t.contact_type||''}</td></tr>`;});
   const jbody=document.querySelector('#jdTable tbody');jbody.innerHTML='';
-  (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td><span class=\"badge badge-green\">${j.source_platform||''}</span></td></tr>`;});
-  // Questions
-  if(data.questions?.length){document.getElementById('suggestedQuestions').innerHTML='<span style=\"font-size:12px;color:var(--text-secondary)\">追问:</span> '+data.questions.map(q=>`<button class=\"btn btn-ghost btn-sm\" onclick=\"askQuestion('${q}')\">${q}</button>`).join('');}
-  // Show step2 if stage1
-  if(data.stage===1)document.getElementById('step2Panel').style.display='';
+  (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td><span class="badge badge-green">${j.source_platform||''}</span></td></tr>`;});
+  const qDiv=document.getElementById('suggestedQuestions');
+  if(data.questions?.length){qDiv.innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速追问:</span>'+data.questions.map(q=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${q}')">${q}</button>`).join('');}
   switchTab('talents');loadHistory();
 }
 function switchTab(tab){
-  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',['talents','jds','chat','report'][i]===tab||t.id==='btnOpenReport'&&tab==='report');});
-  if(tab==='report'){openReport();return;}
+  document.querySelectorAll('.tab').forEach((t,i)=>{t.classList.toggle('active',t.textContent.includes(tab==='talents'?'候选人':tab==='jds'?'JD':tab==='chat'?'追问':''));});
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
 }
 function openReport(){if(currentData&&currentData.report_html){const w=window.open('','_blank');w.document.write(currentData.report_html);w.document.close()}}
 async function regenerateReport(){
   if(!currentData||!currentData._posId) return;
-  const btn=document.getElementById('btnRegenReport'); btn.textContent='生成中...';
+  const btn=document.getElementById('btnRegenReport');btn.textContent='生成中...';
   try{
     const resp=await fetch('/api/regenerate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({position_id:currentData._posId})});
     const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='';
-    while(true){
-      const{value,done}=await reader.read();if(done)break;
-      buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
-      for(const line of lines){if(!line.startsWith('data: '))continue;
-        try{const d=JSON.parse(line.slice(6));
-          if(d.step==='progress'){btn.textContent=d.text;}
-          else if(d.step==='done'){btn.textContent='报告完成!';currentData.report_html=d.report_html;const rb=document.getElementById('btnOpenReport');rb.textContent='查看完整报告('+d.chars+'字)';rb.style.color='#f59e0b';openReport();}
-          else if(d.error){btn.textContent='生成失败';}
-        }catch(e){}
-      }
-    }
-  }catch(e){btn.textContent='生成失败,重试';}
-}
-
-async function sendChat(){
-  const input=document.getElementById('chatInput');const q=input.value.trim();if(!q||!currentData)return;input.value='';
-  const msgs=document.getElementById('chatMessages');msgs.innerHTML+=`<div class=\"chat-msg chat-user\">${q}</div>`;
-  try{const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData})});const d=await resp.json();msgs.innerHTML+=`<div class=\"chat-msg chat-bot\">${d.answer||d.error}</div>`;}catch(e){}
-  msgs.scrollTop=msgs.scrollHeight;
+    while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
+      for(const line of lines){if(!line.startsWith('data: '))continue;try{const d=JSON.parse(line.slice(6));
+        if(d.step==='progress'){btn.textContent=d.text;}
+        else if(d.step==='done'){btn.textContent='完成!';currentData.report_html=d.report_html;const rb=document.getElementById('btnOpenReport');rb.textContent='查看完整报告('+d.chars+'字)';rb.style.color='#f59e0b';openReport();}
+        else if(d.error){btn.textContent='生成失败';}
+      }catch(e){}}}
+  }catch(e){btn.textContent='生成失败';}
 }
 function askQuestion(q){document.getElementById('chatInput').value=q;switchTab('chat');sendChat()}
-function fillAndGo(p,t,b){document.getElementById('ctx_problem').value=p;document.getElementById('ctx_team').value=t;document.getElementById('ctx_budget').value=b;generateStage2()}
-async function generateStage2(){
-  if(!currentData)return;const ctx={problem:document.getElementById('ctx_problem').value.trim(),team:document.getElementById('ctx_team').value.trim(),budget:document.getElementById('ctx_budget').value.trim()};
-  updateProgress(10,'分析需求...');
-  try{const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim(),stage:2,context:{...currentData,userContext:ctx}})});
-  const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='';
-  while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';for(const line of lines){if(!line.startsWith('data: '))continue;try{const d=JSON.parse(line.slice(6));if(d.step==='done'){updateProgress(100,'完成');currentData=d;showResults(d);document.getElementById('step2Panel').style.display='none';}}catch(e){}}}
+async function sendChat(){
+  const input=document.getElementById('chatInput');const q=input.value.trim();if(!q||!currentData)return;input.value='';
+  const msgs=document.getElementById('chatMessages');msgs.innerHTML+=`<div class="chat-msg chat-user">${q}</div>`;
+  try{
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData,industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim()})});
+    const d=await resp.json();
+    let extra='';
+    if(d.recommendations?.length){
+      extra='<div style="margin-top:8px;font-size:12px;color:#10b981">推荐候选人: '+d.recommendations.map(r=>`<span class="badge badge-green">${r.name}(${r.reason})</span>`).join(' ')+'</div>';
+    }
+    msgs.innerHTML+=`<div class="chat-msg chat-bot${d.recommendations?.length?' chat-recommend':''}">${d.answer||d.error}${extra}</div>`;
+    if(d.suggestions?.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">继续追问:</span>'+d.suggestions.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
   }catch(e){}
+  msgs.scrollTop=msgs.scrollHeight;
 }
 async function loadHistory(){
   const el=document.getElementById('historyList');
-  try{const resp=await fetch('/api/data?list=true');if(!resp.ok)throw new Error('API');const d=await resp.json();const p=d.positions||[];if(!p.length){el.innerHTML='<div class=\"empty\">暂无历史报告</div>';return;}
-  const fmtDate=(d)=>d?d.substring(0,10):'';
-  el.innerHTML=p.map(x=>`<div class=\"history-item\"><div><span style=\"font-weight:600\">${x.industry||'?'} - ${x.role_direction||'?'}</span><span class=\"history-meta\" style=\"margin-left:8px\">${fmtDate(x.created_at)}</span></div><button class=\"btn btn-ghost btn-sm\" onclick=\"loadPosition(${x.id})\">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class=\"empty\">暂无历史报告</div>';}
+  try{const resp=await fetch('/api/data?list=true');if(!resp.ok)throw new Error('API');const d=await resp.json();const p=d.positions||[];if(!p.length){el.innerHTML='<div class="empty">暂无历史报告</div>';return;}
+  const fmtDate=(d)=>d?d.substring(0,10):'';el.innerHTML=p.map(x=>`<div class="history-item"><div><span style="font-weight:600">${x.industry||'?'} - ${x.role_direction||'?'}</span><span class="history-meta" style="margin-left:8px">${fmtDate(x.created_at)}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${x.id})">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
 }
 async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;showResults(data);document.getElementById('btnRegenReport').style.display='';}
 loadHistory();
