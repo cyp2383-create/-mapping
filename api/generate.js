@@ -51,7 +51,7 @@ function createTavily() {
       body:JSON.stringify({api_key:process.env.TAVILY_KEY, query, max_results:maxResults, search_depth:'advanced'})
     });
     const d = await resp.json();
-    return (d.results||[]).map(r=>({title:r.title,url:r.url,snippet:r.content?.substring(0,3000)||''}));
+    return (d.results||[]).map(r=>({title:r.title,url:r.url,snippet:r.content||''}));
   }};
 }
 
@@ -349,12 +349,12 @@ async function initTables() {
 // ===== DeepSeek batch enrichment =====
 
 async function deepExtractTalents(ai, talents) {
-  const text = talents.slice(0,25).map((t,i) => `[${i}] ${t.snippet||''}`).join('\n---\n');
+  const text = talents.slice(0,25).map((t,i) => `[${i}] ${(t.snippet||'').substring(0,2000)}`).join('\n---\n');
   const prompt = `Extract hidden fields from LinkedIn profile snippets. Return JSON array, one object per profile:
 [{"education":"school+degree","languages":"lang1,lang2","certifications":"cert1,cert2","influence_score":0-10,"location":"city,country"}]
 influence_score: 500+ connections=7, 1000+ followers=8, 2000+=9, 5000+=10. If no data, use empty string.
-Profiles:\n${text.substring(0,6000)}`;
-  const result = await ai.chat(prompt, 2000);
+Profiles:\n${text.substring(0,12000)}`;
+  const result = await ai.chat(prompt, 3000);
   try {
     let t = result.trim(); if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n'); if (t.endsWith('```')) t = t.slice(0,-3);
     return JSON.parse(t);
@@ -362,11 +362,11 @@ Profiles:\n${text.substring(0,6000)}`;
 }
 
 async function deepExtractJDs(ai, jds) {
-  const text = jds.slice(0,15).map((j,i) => `[${i}] ${j.snippet||''}`).join('\n---\n');
+  const text = jds.slice(0,15).map((j,i) => `[${i}] ${(j.snippet||'').substring(0,2000)}`).join('\n---\n');
   const prompt = `Extract structured fields from job description snippets. Return JSON array:
 [{"salary":"range if mentioned","experience":"e.g. 3-5 years","education_req":"e.g. Bachelor","tools":"tool1,tool2"}]
-If field not found, use empty string. JDs:\n${text.substring(0,6000)}`;
-  const result = await ai.chat(prompt, 1500);
+If field not found, use empty string. JDs:\n${text.substring(0,12000)}`;
+  const result = await ai.chat(prompt, 2500);
   try {
     let t = result.trim(); if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n'); if (t.endsWith('```')) t = t.slice(0,-3);
     return JSON.parse(t);
