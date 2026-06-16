@@ -167,6 +167,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     const db = turso();
     db.execute("UPDATE positions SET report_html='"+rjson.replace(/'/g,'')+"' WHERE id=(SELECT MAX(id) FROM positions)").catch(e=>{});
     send({step:'report_ready',progress:100, report_html: reportHtml});
+  } catch(e) {
     send({step:'report_ready',progress:100,
       report_html: '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成失败</p>',
     });
