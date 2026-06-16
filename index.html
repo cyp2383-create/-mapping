@@ -143,8 +143,8 @@ async function startGenerate(){
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
           if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;showResults(d);}
+          else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('btnOpenReport').textContent='生成中...'+d.chars+'字';}
           else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);}
-          else if(d.step==='done'){updateProgress(100,'完成');currentData=d;showResults(d);}
           else if(d.step==='error'){alert(d.text);}
           else{updateProgress(d.progress||50,d.text||'处理中...');if(d.companies)document.getElementById('results').style.display='';}
         }catch(e){}

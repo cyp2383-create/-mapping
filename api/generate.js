@@ -109,10 +109,12 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   const talents = await searchLinkedIn(tavily, companies.slice(0,6), role);
   send({step:'talents',text:`找到${talents.length}位候选人`,progress:55});
 
-  // Deep enrichment: extract hidden fields from snippets
+  // Deep enrichment: extract hidden fields from snippets (parallel)
   send({step:'enrich',text:'深度提取候选人档案...',progress:58});
-  const enrichedT = await deepExtractTalents(ai, talents.slice(0,25));
-  const enrichedJ = await deepExtractJDs(ai, jds.slice(0,15));
+  const [enrichedT, enrichedJ] = await Promise.all([
+    deepExtractTalents(ai, talents.slice(0,25)),
+    deepExtractJDs(ai, jds.slice(0,15))
+  ]);
 
   // Parse and classify talents with enriched data
   const talentRows = talents.slice(0,40).map((t, i) => {
@@ -163,14 +165,16 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
 
   storeResults(industry, role, talentRows, jdRows).catch(e => {});
 
-  // PHASE 2: Generate report
-  send({step:'report',text:'正在生成报告...',progress:70});
-  const reportTimeout = (promise, ms) => Promise.race([promise, new Promise(r => setTimeout(() => r(null), ms))]);
-  const reportHtml = await reportTimeout(generateMacroHtml(ai, talentRows, jds, industry, role), 25000);
-
-  send({step:'report_ready',progress:100,
-    report_html: reportHtml || '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成超时，请刷新重试。候选人数据已就绪。</p>',
-  });
+  // PHASE 2: Generate report (streaming)
+  send({step:'report',text:'开始生成报告...',progress:70});
+  try {
+    const reportHtml = await generateMacroHtmlStreaming(ai, talentRows, jds, industry, role, send);
+    send({step:'report_ready',progress:100, report_html: reportHtml});
+  } catch(e) {
+    send({step:'report_ready',progress:100,
+      report_html: '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成失败: '+e.message+'</p>',
+    });
+  }
 }
 
 // ========== STEP 2: 定向人才地图 ==========
@@ -252,6 +256,34 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
 }
 
 // ========== Report Generators ==========
+
+async function generateMacroHtmlStreaming(ai, talents, jds, industry, role, send) {
+  const highT = talents.filter(t=>t.tier==='high').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
+  const midT = talents.filter(t=>t.tier==='mid').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
+  const jdText = jds.slice(0,10).map(j=>(j.snippet||'').substring(0,500)).join('\n').substring(0,4000);
+  const prompt = `为${industry}行业的${role}岗位生成一份咨询级HTML人才地图报告。
+深色主题: 背景#10101c, 卡片rgba(255,255,255,.03), 文字#f5f5f5, 强调色#f59e0b。
+数据整理: 1.市场JD分析 2.候选人画像。推理分析: 3.人才特征素描 4.职业路径 5.招聘策略。
+高端:${highT} 中端:${midT} JD:${jdText}`;
+
+  const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
+    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.1,max_tokens:3000,stream:true})
+  });
+  const reader = resp.body.getReader(); const decoder = new TextDecoder();
+  let buf='', full='', start=Date.now();
+  while(true){const{value,done}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});
+    const lines=buf.split('\n');buf=lines.pop()||'';
+    for(const line of lines){if(!line.startsWith('data:'))continue;const c=line.slice(6);if(c==='[DONE]')continue;
+      try{full+=JSON.parse(c).choices?.[0]?.delta?.content||'';}catch(e){}
+    }
+    const elapsed=Math.round((Date.now()-start)/1000);
+    send({step:'report_progress',progress:70+Math.min(25,elapsed),text:`报告生成中...${full.length}字(${elapsed}秒)`,chars:full.length,elapsed});
+  }
+  let t=full.trim();const ts=t.indexOf('<');if(ts>0)t=t.substring(ts);
+  if(t.startsWith('```html'))t=t.split('\n').slice(1).join('\n');if(t.startsWith('```'))t=t.split('\n').slice(1).join('\n');if(t.endsWith('```'))t=t.slice(0,-3);
+  return t.trim();
+}
 
 async function generateMacroHtml(ai, talents, jds, industry, role) {
   const highT = talents.filter(t=>t.tier==='high').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
