@@ -158,14 +158,14 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
 
   storeResults(industry, role, talentRows, jdRows).catch(e => {});
 
-  // PHASE 2: Generate report (streaming)
-  send({step:'report',text:'开始生成报告...',progress:70});
+  // PHASE 2: Generate template-based report (same as regenerate)
+  send({step:'report',text:'生成报告...',progress:70});
   try {
-    const reportHtml = await generateMacroHtmlStreaming(ai, talentRows, jds, industry, role, send);
+    const reportHtml = await buildStreamingReport(ai, talentRows, jdRows, industry, role, send);
     send({step:'report_ready',progress:100, report_html: reportHtml});
   } catch(e) {
     send({step:'report_ready',progress:100,
-      report_html: '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成失败: '+e.message+'</p>',
+      report_html: '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成失败</p>',
     });
   }
 }
@@ -250,32 +250,105 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
 
 // ========== Report Generators ==========
 
-async function generateMacroHtmlStreaming(ai, talents, jds, industry, role, send) {
-  const highT = talents.filter(t=>t.tier==='high').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const midT = talents.filter(t=>t.tier==='mid').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const jdText = jds.slice(0,10).map(j=>(j.snippet||'').substring(0,500)).join('\n').substring(0,4000);
-  const prompt = `为${industry}行业的${role}岗位生成一份咨询级HTML人才地图报告。
-深色主题: 背景#10101c, 卡片rgba(255,255,255,.03), 文字#f5f5f5, 强调色#f59e0b。
-数据整理: 1.市场JD分析 2.候选人画像。推理分析: 3.人才特征素描 4.职业路径 5.招聘策略。
-高端:${highT} 中端:${midT} JD:${jdText}`;
+async function buildStreamingReport(ai, talents, jds, industry, role, send) {
+  // Compute stats (same logic as regenerate.js)
+  const stats = computeReportStats(talents, jds);
+  const tText = talents.slice(0,15).map(t=>`${t.name||'?'}|${t.current_company||''}|${t.current_title||''}`).join('\n');
+
+  // Stream DeepSeek analysis for experience levels
+  const prompt = `为${industry}行业${role}岗位写4段短分析, 必须严格覆盖4个经验阶段:
+1. 校招生(0-1年): 需要什么技能, 典型项目举例(80字)
+2. 1-3年: 需要什么技能, 典型项目举例(80字)
+3. 3-5年: 需要什么技能, 典型项目举例(80字)
+4. 5年以上: 需要什么技能, 典型项目举例(80字)
+每个阶段用<div class='level-card'><h3>阶段名</h3><p>内容</p></div>格式。必须是4段。候选人参考:${tText}`;
 
   const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
     method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.1,max_tokens:3000,stream:true})
+    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:1500,stream:true})
   });
   const reader = resp.body.getReader(); const decoder = new TextDecoder();
-  let buf='', full='', start=Date.now();
+  let buf='', analysis='', start=Date.now();
   while(true){const{value,done}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});
     const lines=buf.split('\n');buf=lines.pop()||'';
     for(const line of lines){if(!line.startsWith('data:'))continue;const c=line.slice(6);if(c==='[DONE]')continue;
-      try{full+=JSON.parse(c).choices?.[0]?.delta?.content||'';}catch(e){}
+      try{analysis+=JSON.parse(c).choices?.[0]?.delta?.content||'';}catch(e){}
     }
-    const elapsed=Math.round((Date.now()-start)/1000);
-    send({step:'report_progress',progress:70+Math.min(25,elapsed),text:`报告生成中...${full.length}字(${elapsed}秒)`,chars:full.length,elapsed});
+    send({step:'report_progress',progress:75+Math.min(20,Math.round((Date.now()-start)/1000)),text:`生成分析中...${analysis.length}字`,chars:analysis.length});
   }
-  let t=full.trim();const ts=t.indexOf('<');if(ts>0)t=t.substring(ts);
-  if(t.startsWith('```html'))t=t.split('\n').slice(1).join('\n');if(t.startsWith('```'))t=t.split('\n').slice(1).join('\n');if(t.endsWith('```'))t=t.slice(0,-3);
-  return t.trim();
+  analysis=analysis.trim();
+  if(analysis.startsWith('```'))analysis=analysis.replace(/```html?|```/g,'');
+
+  // Build final HTML with stats + analysis
+  return buildReportHTML(stats, analysis, industry, role);
+}
+
+// ===== Report stats computation =====
+function computeReportStats(talents, jds) {
+  const total = talents.length||1;
+  const edu={}; talents.forEach(t=>{const e=(t.education||'').trim();if(e){const k=e.split('+')[0].substring(0,20);edu[k]=(edu[k]||0)+1;}});
+  let eduSorted=Object.entries(edu).sort((a,b)=>b[1]-a[1]);
+  if(!eduSorted.length){const tmp={};talents.forEach(t=>{const l=t.level||'其他';tmp[l]=(tmp[l]||0)+1;});eduSorted=Object.entries(tmp).sort((a,b)=>b[1]-a[1]);}
+  eduSorted=eduSorted.slice(0,5);
+  const exp={校招生:0,'1-3年':0,'3-5年':0,'5年以上':0};
+  talents.forEach(t=>{const lv=(t.level||'').toLowerCase();const tt=(t.current_title||'').toLowerCase();
+    if(/intern|实习|应届|trainee|校招/i.test(tt)||/专员|初级|助理|associate|junior/i.test(tt))exp['校招生']++;
+    else if(/总监|vp|副总裁|head|director|principal|首席|负责人/i.test(tt)||lv.includes('总监'))exp['5年以上']++;
+    else if(/资深|高级|senior|staff|lead|经理|manager/i.test(tt)||lv.includes('经理'))exp['3-5年']++;
+    else exp['1-3年']++;});
+  const techKw=['agent','rag','llm','prompt','ai','ml','python','sql','产品','数据','模型','算法','架构','设计','运营','分析','开发','管理','系统','平台','大模型','gpt','transformer','微调','评测','a/b','增长','策略'];
+  const hardSkills={};techKw.forEach(kw=>{let cnt=0;(jds||[]).forEach(j=>{if((j.snippet||'').toLowerCase().includes(kw))cnt++;});if(cnt>0)hardSkills[kw]=cnt;});
+  const skillSorted=Object.entries(hardSkills).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const comp={};talents.forEach(t=>{const c=t.current_company||'其他';comp[c]=(comp[c]||0)+1;});
+  const compSorted=Object.entries(comp).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  return {total,eduSorted,exp,skillSorted,compSorted};
+}
+
+function buildReportHTML(stats, analysisHtml, industry, role) {
+  const total=stats.total;
+  const eduColors=['#f59e0b','#10b981','#6366f1','#ef4444','#8b5cf6'];
+  const eduPie=stats.eduSorted.map(([,v],i)=>{const pct=Math.round(v/total*100);const prev=stats.eduSorted.slice(0,i).reduce((s,[,n])=>s+Math.round(n/total*100),0);return`${eduColors[i]} ${prev}% ${prev+pct}%`;}).join(',');
+  const expColors=['#10b981','#f59e0b','#6366f1','#ef4444'];
+  const expEntries=Object.entries(stats.exp);const expPieNums=expEntries.map(([,v])=>Math.round(v/total*100));
+  const expPie=expEntries.map(([,v],i)=>{const pct=expPieNums[i];const prev=expPieNums.slice(0,i).reduce((s,n)=>s+n,0);return`${expColors[i]} ${prev}% ${prev+pct}%`;}).join(',');
+  const cc=['#f59e0b','#10b981','#6366f1','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+  const compPie=stats.compSorted.map(([,v],i)=>{const pct=Math.round(v/total*100);const prev=stats.compSorted.slice(0,i).reduce((s,[,n])=>s+Math.round(n/total*100),0);return`${cc[i]} ${prev}% ${prev+pct}%`;}).join(',');
+  const skillTags=stats.skillSorted.map(([k,v])=>`<span class="skill-tag">${k} <small>${v}</small></span>`).join('');
+  return`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.08) 0%,transparent 50%),linear-gradient(180deg,#151525 0%,#121220 30%,#10101c 60%,#121220 100%);background-attachment:fixed;color:#f5f5f5;line-height:1.6;padding:32px 24px;max-width:1100px;margin:0 auto}
+h1{font-size:28px;font-weight:800;text-align:center;margin-bottom:28px;background:linear-gradient(135deg,#f5f5f5,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{font-size:18px;font-weight:600;margin:28px 0 16px;border-left:3px solid #f59e0b;padding-left:12px;color:#f5f5f5}
+.dashboard{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+.pie-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;text-align:center}
+.pie-card h3{font-size:12px;font-weight:600;color:#a8a8a8;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
+.pie{width:100px;height:100px;border-radius:50%;margin:0 auto 12px;box-shadow:0 0 20px rgba(245,158,11,.1)}
+.pie.edu{background:conic-gradient(${eduPie||'#333 0% 100%'})}
+.pie.exp{background:conic-gradient(${expPie||'#333 0% 100%'})}
+.pie.comp{background:conic-gradient(${compPie||'#333 0% 100%'})}
+.legend{font-size:11px;color:#a8a8a8;text-align:left;margin-top:8px}
+.legend span{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.skills-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:24px}
+.skills-card h3{font-size:12px;font-weight:600;color:#a8a8a8;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
+.skill-tag{display:inline-block;background:rgba(245,158,11,.15);color:#fcd34d;padding:4px 10px;border-radius:20px;font-size:12px;margin:3px;border:1px solid rgba(245,158,11,.2)}
+.skill-tag small{color:#a8a8a8;margin-left:4px}
+.level-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:14px}
+.level-card h3{color:#f59e0b;font-size:16px;font-weight:600;margin-bottom:10px}
+.level-card p{font-size:14px;color:#a8a8a8;line-height:1.8}
+@media(max-width:700px){.dashboard{grid-template-columns:1fr}}
+</style></head><body>
+<h1>${role} · ${industry} 人才画像报告</h1>
+<div class="dashboard">
+<div class="pie-card"><h3>学历分布</h3><div class="pie edu"></div><div class="legend">${stats.eduSorted.map(([k,v],i)=>`<div><span style="background:${eduColors[i]}"></span>${k}:${Math.round(v/total*100)}%</div>`).join('')||'暂无数据'}</div></div>
+<div class="pie-card"><h3>经验分布</h3><div class="pie exp"></div><div class="legend">${expEntries.map(([k],i)=>`<div><span style="background:${expColors[i]}"></span>${k}:${expPieNums[i]}%</div>`).join('')}</div></div>
+<div class="pie-card"><h3>公司来源</h3><div class="pie comp"></div><div class="legend">${stats.compSorted.slice(0,5).map(([k,v],i)=>`<div><span style="background:${cc[i]}"></span>${k.substring(0,15)}:${v}人</div>`).join('')}</div></div>
+</div>
+<div class="skills-card"><h3>硬技能 TOP10</h3><div>${skillTags||'暂无数据'}</div></div>
+<h2>经验阶段分析</h2>
+${analysisHtml||'<div class="level-card"><p>分析生成失败。</p></div>'}
+<div style="text-align:center;padding:24px;color:#666;font-size:12px">数据来源: Tavily · LinkedIn · DeepSeek | 标注[AI推理]的内容为算法推断</div>
+</body></html>`;
 }
 
 // ========== Pipeline helpers ==========
