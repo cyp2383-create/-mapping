@@ -162,6 +162,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   send({step:'report',text:'生成报告...',progress:70});
   try {
     const reportHtml = await buildStreamingReport(ai, talentRows, jdRows, industry, role, send);
+    saveReportHtml(reportHtml).catch(e=>{});
     send({step:'report_ready',progress:100, report_html: reportHtml});
   } catch(e) {
     send({step:'report_ready',progress:100,
@@ -431,6 +432,15 @@ If field not found, use empty string. JDs:\n${text.substring(0,12000)}`;
     let t = result.trim(); if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n'); if (t.endsWith('```')) t = t.slice(0,-3);
     return JSON.parse(t);
   } catch { return []; }
+}
+
+async function saveReportHtml(reportHtml) {
+  const db = turso();
+  try {
+    await db.execute("ALTER TABLE positions ADD COLUMN report_html TEXT");
+  } catch(e) {}
+  const safeHtml = reportHtml.replace(/'/g,"''");
+  await db.execute("UPDATE positions SET report_html='"+safeHtml+"' WHERE id=(SELECT MAX(id) FROM positions)");
 }
 
 async function storeResults(industry, role, talentRows, jdRows) {
