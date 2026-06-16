@@ -55,13 +55,6 @@ function createTavily() {
   }};
 }
 
-function cleanJson(text) {
-  let t = (text||'').trim();
-  if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n');
-  if (t.endsWith('```')) t = t.slice(0,-3);
-  return t.trim();
-}
-
 // ========== Tier Classification ==========
 
 function classifyTier(companyName, titleStr) {
@@ -285,45 +278,7 @@ async function generateMacroHtmlStreaming(ai, talents, jds, industry, role, send
   return t.trim();
 }
 
-async function generateMacroHtml(ai, talents, jds, industry, role) {
-  const highT = talents.filter(t=>t.tier==='high').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const midT = talents.filter(t=>t.tier==='mid').slice(0,10).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const jdText = jds.slice(0,10).map(j=>j.snippet||'').join('\n').substring(0,4000);
-  const prompt = `为${industry}行业的${role}岗位生成一份咨询级HTML人才地图报告。
-深色主题: 背景#10101c, 卡片rgba(255,255,255,.03), 文字#f5f5f5, 强调色#f59e0b。
-
-=== 数据整理 [标注来源] ===
-1. 市场JD分析: 硬技能TOP10频次, 学历/经验门槛, 共性要求
-2. 候选人画像: 公司分布, 职级统计, 典型背景
-
-=== 推理分析 [标注洞察] ===
-3. 人才特征素描: 高端vs中端的分水岭(关键经历/能力差异, 不只是年限)
-4. 职业路径: 从什么角色晋升来, 下一步去哪
-5. 招聘策略: 优先挖哪些公司, 面试重点, 90天预期
-
-高端候选人: ${highT}
-中端候选人: ${midT}
-JD数据: ${jdText}`;
-  const html = await ai.chat(prompt, 3000);
-  let t = html.trim();
-  const tagStart = t.indexOf('<');
-  if (tagStart > 0) t = t.substring(tagStart);
-  if (t.startsWith('```html')) t = t.split('\n').slice(1).join('\n');
-  if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n');
-  if (t.endsWith('```')) t = t.slice(0,-3);
-  return t.trim();
-}
-
-async function generateQuestions(ai, talents, jds, industry, role) {
-  const prompt = `Based on this ${industry} ${role} talent map (${talents.length} talents, ${jds.length} JDs), generate 3 structured follow-up questions that a VP would ask before making a hiring decision. Return JSON array of strings.`;
-  const text = await ai.chat(prompt, 300);
-  try {
-    let t = text.trim(); if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n'); if (t.endsWith('```')) t = t.slice(0,-3);
-    return JSON.parse(t);
-  } catch { return ["招这个人要解决什么核心问题?","团队规模和汇报关系?","预算范围?"]; }
-}
-
-// ========== Pipeline helpers (same as before) ==========
+// ========== Pipeline helpers ==========
 
 async function generateCompanies(ai, industry, role) {
   const prompt = `你是猎头顾问。为"${industry}"行业的"${role}"列出15家最重要公司。按梯队。JSON数组: [{"name":"公司","tier":"第一梯队"}]`;
