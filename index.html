@@ -209,7 +209,7 @@ async function sendChat(){
 async function loadHistory(){
   const el=document.getElementById('historyList');
   try{const resp=await fetch('/api/data?list=true');if(!resp.ok)throw new Error('API');const d=await resp.json();const p=d.positions||[];if(!p.length){el.innerHTML='<div class="empty">暂无历史报告</div>';return;}
-  const fmtDate=(d)=>d?d.substring(0,10):'';el.innerHTML=p.map(x=>`<div class="history-item"><div><span style="font-weight:600">${x.industry||'?'} - ${x.role_direction||'?'}</span><span class="history-meta" style="margin-left:8px">${fmtDate(x.created_at)}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${x.id})">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
+  const fmtDate=(d)=>d?d.substring(0,10):'';el.innerHTML=p.map(x=>`<div class="history-item"><div><span style="font-weight:600">报告 #${x.id}</span><span class="history-meta" style="margin-left:8px">${fmtDate(x.created_at)}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${x.id})">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
 }
 async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;showResults(data);document.getElementById('btnRegenReport').style.display='';}
 loadHistory();
