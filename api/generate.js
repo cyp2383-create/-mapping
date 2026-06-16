@@ -51,7 +51,7 @@ function createTavily() {
       body:JSON.stringify({api_key:process.env.TAVILY_KEY, query, max_results:maxResults, search_depth:'advanced'})
     });
     const d = await resp.json();
-    return (d.results||[]).map(r=>({title:r.title,url:r.url,snippet:r.content?.substring(0,500)||''}));
+    return (d.results||[]).map(r=>({title:r.title,url:r.url,snippet:r.content?.substring(0,3000)||''}));
   }};
 }
 
