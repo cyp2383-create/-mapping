@@ -50,14 +50,28 @@ export default async function handler(req, res) {
       }
     } catch {}
     try { jds = JSON.parse(obj.jd_data||'[]'); } catch {}
-    // Convert raw Tavily format to parsed format if needed
+    // Normalize: always ensure all expected fields exist
     talents = talents.map(t => {
-      if (t.name !== undefined) return t; // Already parsed
-      const raw = t.title||'';
-      const parts = raw.split(' - ').map(s=>s.trim());
-      const urlMatch = (t.url||'').match(/linkedin\.com\/in\/([^/]+)/);
-      const name = parts[0] || (urlMatch ? urlMatch[1].replace(/-/g,' ').replace(/[0-9]/g,'').trim() : raw.substring(0,25));
-      return {name:name||raw.substring(0,25), current_title:parts[1]||'', current_company:t.company||parts[2]||'', source_platform:'linkedin', source_url:t.url||'', contact_type:t.url?'linkedin':'none', contact_value:t.url||''};
+      let result;
+      if (t.name !== undefined) {
+        result = {...t}; // Already parsed, keep all fields
+      } else {
+        // Raw Tavily format: convert
+        const raw = t.title||'';
+        const parts = raw.split(' - ').map(s=>s.trim());
+        const urlMatch = (t.url||'').match(/linkedin\.com\/in\/([^/]+)/);
+        const name = parts[0] || (urlMatch ? urlMatch[1].replace(/-/g,' ').replace(/[0-9]/g,'').trim() : raw.substring(0,25));
+        result = {name:name||raw.substring(0,25), current_title:parts[1]||'', current_company:t.company||parts[2]||'', source_platform:'linkedin', source_url:t.url||'', contact_type:t.url?'linkedin':'none', contact_value:t.url||''};
+      }
+      // Ensure enrichment fields always have defaults
+      result.education = result.education || '';
+      result.languages = result.languages || '';
+      result.certifications = result.certifications || '';
+      result.influence_score = result.influence_score || 0;
+      result.location = result.location || '';
+      result.level = result.level || '其他';
+      result.tier = result.tier || 'low';
+      return result;
     });
     res.json({ talents, jds, industry, role, report_html:'' });
     return;
