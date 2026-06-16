@@ -104,7 +104,7 @@ tr:hover td{background:var(--surface-hover)}
     <button class="tab" onclick="switchTab('chat')">追问</button>
     <span style="flex:1"></span>
     <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">重新生成报告</button>
-    <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:#f59e0b;font-weight:700">报告生成中...</button>
+    <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:var(--text-secondary);font-weight:700">暂无报告</button>
   </div>
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
@@ -144,6 +144,8 @@ async function startGenerate(){
   if(!industry||!role) return;
   const btn=document.getElementById('btnGen');btn.disabled=true;
   const prog=document.getElementById('progress');prog.classList.add('active');
+  document.getElementById('btnOpenReport').textContent='报告生成中...';
+  document.getElementById('btnOpenReport').style.color='var(--text-secondary)';
   updateProgress(5,'连接中...');
   try{
     const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({industry,role,city:document.getElementById('city').value.trim()})});
@@ -168,10 +170,13 @@ function updateProgress(pct,text){document.getElementById('progressFill').style.
 function showResults(data){
   document.getElementById('results').style.display='';
   document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>${data.tier_stats?`<div class="stat-card"><div class="stat-num" style="color:#10b981">${data.tier_stats.high}</div><div class="stat-lbl">高端</div></div><div class="stat-card"><div class="stat-num" style="color:#f59e0b">${data.tier_stats.mid}</div><div class="stat-lbl">中端</div></div><div class="stat-card"><div class="stat-num" style="color:#ef4444">${data.tier_stats.low}</div><div class="stat-lbl">低端</div></div>`:''}`;
-  // Report button - always visible, shows status
+  // Report button: show status based on data
   const rb=document.getElementById('btnOpenReport');
-  if(data.report_html&&data.report_html.length>100){rb.textContent='查看完整报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';}
-  else{rb.textContent='报告生成中...';rb.style.color='var(--text-secondary)';}
+  if(data.report_html&&data.report_html.length>100){
+    rb.textContent='查看完整报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';
+  }else{
+    rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';
+  }
   // Talents table
   const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
   (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class=\"badge badge-green\">高</span>':t.tier==='mid'?'<span class=\"badge badge-yellow\">中</span>':'<span class=\"badge badge-purple\">低</span>';const infScore=t.influence_score?('⭐'.repeat(Math.min(5,Math.round(t.influence_score/2)))):'';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td style=\"font-size:11px\">${t.education||''}</td><td style=\"font-size:11px\">${t.languages||''}</td><td>${infScore}</td><td>${t.contact_type||''}</td></tr>`;});
