@@ -75,13 +75,14 @@ function computeStats(talents, jds) {
   talents.forEach(t=>{ const e=t.education||''; if(e){const k=e.split('+')[0].substring(0,20);edu[k]=(edu[k]||0)+1;} });
   const eduSorted = Object.entries(edu).sort((a,b)=>b[1]-a[1]).slice(0,5);
 
-  // Experience levels from titles
+  // Experience levels from title + level field
   const exp = {校招生:0,'1-3年':0,'3-5年':0,'5年以上':0};
   talents.forEach(t=>{
+    const level=(t.level||'').toLowerCase();
     const title=(t.current_title||'').toLowerCase();
-    if(/intern|实习|应届|trainee/i.test(title)) exp['校招生']++;
-    else if(/senior|staff|principal|总监|vp|head|资深|高级/i.test(title)) exp['5年以上']++;
-    else if(/lead|经理|manager/i.test(title)) exp['3-5年']++;
+    if(/intern|实习|应届|trainee|校招/i.test(title)||/专员|初级|助理|associate|junior/i.test(title)) exp['校招生']++;
+    else if(/总监|vp|副总裁|head|director|principal|首席|负责人/i.test(title)||level.includes('总监')) exp['5年以上']++;
+    else if(/资深|高级|senior|staff|lead|经理|manager/i.test(title)||level.includes('经理')) exp['3-5年']++;
     else exp['1-3年']++;
   });
 
@@ -136,35 +137,36 @@ function buildReport(stats, analysisHtml, industry, role) {
   const skillTags = stats.skillSorted.map(([k,v])=>`<span class="skill-tag">${k} <small>${v}</small></span>`).join('');
 
   return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#10101c;color:#f5f5f5;line-height:1.6;padding:24px;max-width:1100px;margin:0 auto}
-h1{font-size:24px;text-align:center;margin-bottom:24px;color:#f59e0b}
-h2{font-size:18px;margin:24px 0 16px;border-left:3px solid #f59e0b;padding-left:12px}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.08) 0%,transparent 50%),linear-gradient(180deg,#151525 0%,#121220 30%,#10101c 60%,#121220 100%);background-attachment:fixed;color:#f5f5f5;line-height:1.6;padding:32px 24px;max-width:1100px;margin:0 auto}
+h1{font-size:28px;font-weight:800;text-align:center;margin-bottom:28px;background:linear-gradient(135deg,#f5f5f5,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{font-size:18px;font-weight:600;margin:28px 0 16px;border-left:3px solid #f59e0b;padding-left:12px;color:#f5f5f5}
 /* Dashboard */
 .dashboard{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
-.pie-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;text-align:center}
-.pie-card h3{font-size:13px;color:#a8a8a8;margin-bottom:10px}
-.pie{width:100px;height:100px;border-radius:50%;margin:0 auto 10px}
-.pie.${eduPie?'':'empty'}{background:${eduPie?`conic-gradient(${eduPie})`:'rgba(255,255,255,.05)'}}
+.pie-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;text-align:center}
+.pie-card h3{font-size:12px;font-weight:600;color:#a8a8a8;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
+.pie{width:100px;height:100px;border-radius:50%;margin:0 auto 12px;box-shadow:0 0 20px rgba(245,158,11,.1)}
+.pie.edu{background:${eduPie?`conic-gradient(${eduPie})`:'rgba(255,255,255,.05)'}}
 .pie.exp{background:${expPie?`conic-gradient(${expPie})`:'rgba(255,255,255,.05)'}}
 .pie.comp{background:${compPie?`conic-gradient(${compPie})`:'rgba(255,255,255,.05)'}}
-.legend{font-size:11px;color:#a8a8a8;text-align:left;margin-top:6px}
+.legend{font-size:11px;color:#a8a8a8;text-align:left;margin-top:8px}
 .legend span{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
 /* Skills */
-.skills-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:24px}
-.skills-card h3{font-size:13px;color:#a8a8a8;margin-bottom:10px}
-.skill-tag{display:inline-block;background:rgba(245,158,11,.15);color:#fcd34d;padding:4px 10px;border-radius:20px;font-size:12px;margin:3px}
+.skills-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:24px}
+.skills-card h3{font-size:12px;font-weight:600;color:#a8a8a8;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
+.skill-tag{display:inline-block;background:rgba(245,158,11,.15);color:#fcd34d;padding:4px 10px;border-radius:20px;font-size:12px;margin:3px;border:1px solid rgba(245,158,11,.2)}
 .skill-tag small{color:#a8a8a8;margin-left:4px}
 /* Experience breakdown */
-.level-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px}
-.level-card h3{color:#f59e0b;font-size:16px;margin-bottom:8px}
+.level-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:14px}
+.level-card h3{color:#f59e0b;font-size:16px;font-weight:600;margin-bottom:10px}
 .level-card p{font-size:14px;color:#a8a8a8;line-height:1.8}
 @media(max-width:700px){.dashboard{grid-template-columns:1fr}}
 </style></head><body>
 <h1>${role} · ${industry} 人才画像报告</h1>
 
 <div class="dashboard">
-  <div class="pie-card"><h3>学历分布</h3><div class="pie"></div>
+  <div class="pie-card"><h3>学历分布</h3><div class="pie edu"></div>
     <div class="legend">${stats.eduSorted.map(([k,v],i)=>`<div><span style="background:${eduColors[i]}"></span>${k}: ${Math.round(v/total*100)}%</div>`).join('')||'暂无数据'}</div></div>
   <div class="pie-card"><h3>经验分布</h3><div class="pie exp"></div>
     <div class="legend">${expEntries.map(([k,v],i)=>`<div><span style="background:${expColors[i]}"></span>${k}: ${expPieNum[i]}%</div>`).join('')}</div></div>
