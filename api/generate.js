@@ -441,7 +441,7 @@ async function storeResults(industry, role, talentRows, jdRows) {
   // Store Chinese in JSON (Turso TEXT garbles Chinese chars)
   const tjson = JSON.stringify({_industry:industry, _role:role, _name:role+'-'+industry, data:talentRows.slice(0,40)});
   const jjson = JSON.stringify(jdRows.slice(0,30));
-  const rjson = JSON.stringify(reportHtml || '');
+  const rjson = JSON.stringify('');
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
   await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data, report_html) VALUES ('"+pname+"','"+
     industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+
