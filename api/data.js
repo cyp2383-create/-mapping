@@ -27,6 +27,13 @@ export default async function handler(req, res) {
     const positions = rows.map(r => {
       const obj = {};
       cols.forEach((c,i) => { try { obj[c] = r[i]?.value; } catch {} });
+      // Try to get real Chinese name from JSON data
+      try {
+        const raw = JSON.parse(obj.talent_data||'[]');
+        if (raw && raw._name) obj.name = raw._name;
+        if (raw && raw._industry) obj.industry = raw._industry;
+        if (raw && raw._role) obj.role_direction = raw._role;
+      } catch {}
       return obj;
     });
     res.json({ positions });
