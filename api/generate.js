@@ -152,7 +152,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     talents:talentRows, jds:jdRows,
     tier_stats:{high:highTier.length, mid:midTier.length, low:lowTier.length},
     companies:companies.slice(0,15).map(c=>c.name),
-    questions:["快速搭建AI团队","产品AI化升级","紧急替补高管","探索新业务"],
+    questions:["这些大厂在做什么业务?","我的业务适合从哪挖人?","各公司挖人优劣势?","分析一下市场人才趋势"],
     stage:1
   });
 
