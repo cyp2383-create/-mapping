@@ -162,9 +162,11 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   send({step:'report',text:'生成报告...',progress:70});
   try {
     const reportHtml = await buildStreamingReport(ai, talentRows, jdRows, industry, role, send);
-    saveReportHtml(reportHtml).catch(e=>{});
+    // Update the position with report_html (JSON encoded)
+    const rjson = JSON.stringify(reportHtml);
+    const db = turso();
+    db.execute("UPDATE positions SET report_html='"+rjson.replace(/'/g,'')+"' WHERE id=(SELECT MAX(id) FROM positions)").catch(e=>{});
     send({step:'report_ready',progress:100, report_html: reportHtml});
-  } catch(e) {
     send({step:'report_ready',progress:100,
       report_html: '<p style=\"color:#a8a8a8;text-align:center;padding:40px\">报告生成失败</p>',
     });
@@ -434,19 +436,14 @@ If field not found, use empty string. JDs:\n${text.substring(0,12000)}`;
   } catch { return []; }
 }
 
-async function saveReportHtml(reportHtml) {
-  const db = turso();
-  const safeHtml = (reportHtml||'').replace(/'/g,"''");
-  await db.execute("UPDATE positions SET report_html='"+safeHtml+"' WHERE id=(SELECT MAX(id) FROM positions)");
-}
-
 async function storeResults(industry, role, talentRows, jdRows) {
   const db = turso();
   // Store Chinese in JSON (Turso TEXT garbles Chinese chars)
   const tjson = JSON.stringify({_industry:industry, _role:role, _name:role+'-'+industry, data:talentRows.slice(0,40)});
   const jjson = JSON.stringify(jdRows.slice(0,30));
+  const rjson = JSON.stringify(reportHtml || '');
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
-  await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data) VALUES ('"+pname+"','"+
+  await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data, report_html) VALUES ('"+pname+"','"+
     industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+
-    tjson.replace(/'/g,'')+"','"+jjson.replace(/'/g,'')+"')");
+    tjson.replace(/'/g,'')+"','"+jjson.replace(/'/g,'')+"','"+rjson.replace(/'/g,'')+"')");
 }

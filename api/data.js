@@ -80,7 +80,9 @@ export default async function handler(req, res) {
       result.tier = result.tier || 'low';
       return result;
     });
-    res.json({ talents, jds, industry, role, report_html: obj.report_html || '' });
+    let report_html = '';
+    try { report_html = JSON.parse(obj.report_html || '""'); } catch {}
+    res.json({ talents, jds, industry, role, report_html });
     return;
   }
 
