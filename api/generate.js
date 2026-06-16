@@ -142,6 +142,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     const e = enrichedJ[i] || {};
     return {
       title:j.title||'', company:j.company||'',
+      snippet:j.snippet||'',  // Keep snippet for skill extraction
       salary:e.salary||'', experience:e.experience||'',
       education_req:e.education_req||'', tools:e.tools||'',
       source_platform:'websearch', source_url:j.url||'',
