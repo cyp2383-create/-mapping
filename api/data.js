@@ -41,7 +41,7 @@ export default async function handler(req, res) {
   }
 
   if (position_id) {
-    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, jd_data, report_html, created_at FROM positions WHERE id=?", [position_id]);
+    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, jd_data, created_at FROM positions WHERE id=?", [position_id]);
     if (!rows.length) return res.json({ talents: [], jds: [] });
     const obj = {};
     cols.forEach((c,i) => { try { obj[c] = rows[0][i]?.value; } catch {} });

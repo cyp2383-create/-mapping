@@ -446,11 +446,8 @@ async function saveReportHtml(reportHtml) {
 async function storeResults(industry, role, talentRows, jdRows) {
   const db = turso();
   // Store Chinese in JSON (Turso TEXT garbles Chinese chars)
-  // Strip snippet to reduce JSON size (Turso truncates large strings)
-  const lightTalents = talentRows.slice(0,40).map(t=>({name:t.name,current_title:t.current_title,current_company:t.current_company,level:t.level,tier:t.tier,education:t.education,languages:t.languages,certifications:t.certifications,influence_score:t.influence_score,location:t.location,source_url:t.source_url}));
-  const lightJds = jdRows.slice(0,30).map(j=>({title:j.title,company:j.company,salary:j.salary,experience:j.experience,education_req:j.education_req,tools:j.tools,source_url:j.source_url}));
-  const tjson = JSON.stringify({_industry:industry, _role:role, _name:role+'-'+industry, data:lightTalents});
-  const jjson = JSON.stringify(lightJds);
+  const tjson = JSON.stringify({_industry:industry, _role:role, _name:role+'-'+industry, data:talentRows.slice(0,40)});
+  const jjson = JSON.stringify(jdRows.slice(0,30));
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
   await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data) VALUES ('"+pname+"','"+
     industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+
