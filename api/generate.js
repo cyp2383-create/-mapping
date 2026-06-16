@@ -404,7 +404,7 @@ function turso() {
 
 async function initTables() {
   const db = turso();
-  await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, talent_data TEXT, jd_data TEXT, created_at TEXT DEFAULT (datetime()))");
+  await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, talent_data TEXT, jd_data TEXT, report_html TEXT, created_at TEXT DEFAULT (datetime()))");
 }
 
 // ===== DeepSeek batch enrichment =====
@@ -436,10 +436,7 @@ If field not found, use empty string. JDs:\n${text.substring(0,12000)}`;
 
 async function saveReportHtml(reportHtml) {
   const db = turso();
-  try {
-    await db.execute("ALTER TABLE positions ADD COLUMN report_html TEXT");
-  } catch(e) {}
-  const safeHtml = reportHtml.replace(/'/g,"''");
+  const safeHtml = (reportHtml||'').replace(/'/g,"''");
   await db.execute("UPDATE positions SET report_html='"+safeHtml+"' WHERE id=(SELECT MAX(id) FROM positions)");
 }
 
