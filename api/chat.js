@@ -98,70 +98,139 @@ async function handlePersonaBuilding(question, talents, jds, companies) {
   const companyTalentMap = buildCompanyTalentMap(talents);
   const skillExtract = extractKeySkills(jds);
 
-  // Phase 1: Business understanding check
-  // If the business description is vague, ask clarifying questions first
-  const clarityPrompt = `你是资深猎头顾问。用户在描述他的业务需求。判断以下描述是否足够清晰（包含：业务是什么、需要什么类型的人才、人才级别/定位）。
+  // Phase 1: Multi-dimensional needs assessment (5 dimensions)
+  const assessPrompt = `你是资深猎头顾问。用户在描述招聘需求。从以下5个维度评估信息完整度，每维度给出known(0-100分)和缺失的具体信息。
 
 用户描述: "${question}"
 
-如果描述足够清晰（包含上述3个要素中的至少2个），返回: {"clear":true}
-如果描述模糊（少于2个要素），返回: {"clear":false,"missing":["缺失的要素1","缺失的要素2"],"questions":["具体追问1","具体追问2"]}
+5个评估维度:
+1. business_goal: 业务目标(做什么项目、什么阶段0-1还是迭代、落地范围、考核指标)
+2. role_scope: 岗位权责(汇报对象、团队配置、权责边界、交付产出)
+3. hard_requirements: 硬性门槛(经验年限、行业限定、技术理解要求)
+4. team_budget: 团队与预算(薪资级别、职级定位、之前招人痛点)
+5. culture_fit: 软性诉求(公司属性、候选人特质偏好)
 
-只返回JSON。`;
+规则:
+- known分数 >= 60 表示该维度信息基本够用
+- 如果用户是第一次描述且维度known<60，追问该维度最关键缺失的1-2条
+- 每次最多追问3个最关键的问题(优先追问影响最大的缺失维度)
+- 如果5个维度中至少3个known>=60，可以 proceed
+
+返回JSON:
+{
+  "dimensions": {
+    "business_goal": {"known": 0-100, "have": "已知信息","missing": "缺失什么"},
+    "role_scope": {"known": 0-100, "have": "已知信息","missing": "缺失什么"},
+    "hard_requirements": {"known": 0-100, "have": "已知信息","missing": "缺失什么"},
+    "team_budget": {"known": 0-100, "have": "已知信息","missing": "缺失什么"},
+    "culture_fit": {"known": 0-100, "have": "已知信息","missing": "缺失什么"}
+  },
+  "ready_count": 3,
+  "proceed": true/false,
+  "focus_questions": ["最关键追问1","最关键追问2"],
+  "focus_dimensions": ["最需深挖的维度名"]
+}`;
 
   try {
-    const clarityRaw = await callDeepSeek(clarityPrompt, 200, 0.1);
-    const clarity = JSON.parse(clarityRaw.trim().replace(/```json?|```/g, ''));
+    const assessRaw = await callDeepSeek(assessPrompt, 400, 0.1);
+    const assess = JSON.parse(assessRaw.trim().replace(/```json?|```/g, ''));
 
-    if (!clarity.clear) {
-      const qs = (clarity.questions||['能否详细描述一下你的业务方向和具体需求？','你希望找到什么样的人才？']).slice(0,3);
-      const missing = (clarity.missing||[]).join('、');
+    if (!assess.proceed || assess.ready_count < 3) {
+      const qs = (assess.focus_questions || ['能否详细描述一下你的业务方向和具体需求？','这个岗位需要什么核心能力？']).slice(0,3);
+      const focusDims = (assess.focus_dimensions||[]).slice(0,2).join('、');
+      const dims = assess.dimensions || {};
+      // Build a mini radar showing known dimensions
+      const dimLabels = [
+        { key: 'business_goal', label: '业务目标' },
+        { key: 'role_scope', label: '岗位权责' },
+        { key: 'hard_requirements', label: '硬性门槛' },
+        { key: 'team_budget', label: '团队预算' },
+        { key: 'culture_fit', label: '软性诉求' },
+      ];
+      const radarHTML = dimLabels.map(d => {
+        const v = (dims[d.key]?.known) || 0;
+        const color = v >= 60 ? '#10b981' : v >= 30 ? '#f59e0b' : '#ef4444';
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="width:70px;font-size:11px;color:#a8a8a8;text-align:right">${d.label}</span>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden">
+            <div style="width:${v}%;height:100%;background:${color};border-radius:3px"></div>
+          </div>
+          <span style="width:26px;font-size:10px;color:${color};text-align:right">${v}%</span>
+        </div>`;
+      }).join('');
       const answer = `<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:12px;padding:16px;margin-bottom:12px">
-<p style="color:#fcd34d;font-size:14px;margin:0 0 8px"><strong>🤔 想更准确帮你，我需要了解以下信息：</strong></p>
-<p style="color:#a8a8a8;font-size:13px;margin:0 0 12px">目前你提到业务中关于 <span style="color:#f59e0b">${missing}</span> 的信息还不够具体，这会影响人才画像的精准度。</p>
+<p style="color:#fcd34d;font-size:14px;margin:0 0 4px"><strong>🔍 需求深挖中...</strong></p>
+<p style="color:#a8a8a8;font-size:12px;margin:0 0 12px">目前关于 <span style="color:#f59e0b">${focusDims||'部分关键信息'}</span> 还不够清晰，我先帮你梳理一下当前了解的程度：</p>
+<div style="margin-bottom:12px">${radarHTML}</div>
+<p style="color:#e0e0e0;font-size:13px;margin:0 0 10px"><strong>想更精准匹配，请帮我补充：</strong></p>
 <div style="display:flex;flex-direction:column;gap:6px">${qs.map((q,i) => `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 14px;font-size:13px;color:#e0e0e0"><span style="color:#f59e0b;font-weight:600">${i+1}.</span> ${q}</div>`).join('')}</div>
 </div>
-<p style="color:#a8a8a8;font-size:12px">💡 你可以直接在下面回复，描述越具体，人才画像越精准。</p>`;
+<p style="color:#a8a8a8;font-size:11px">💡 信息越具体，人才画像越精准。你可以挑最清楚的部分先回答。</p>`;
       return { answer, recommendations: [], suggestions: qs };
     }
   } catch(e) {
-    // If clarity check fails, proceed with full analysis
+    // Assessment failed, proceed with whatever info we have
   }
 
-  // Phase 2: Business is clear — full persona building
-  const prompt = `你是资深猎头顾问。分析客户业务场景 → 市场对标 → 构建人才画像。
+  // Phase 2: Cross-reference collected companies for business relevance
+  const relevancePrompt = `你是猎头顾问。根据用户业务场景，评估已收集的公司与用户需求的相关性。
 
-## 客户业务场景
+用户业务: "${question}"
+已收集公司及人才: ${companyTalentMap}
+
+对每家相关公司，20字内说明他们在做什么、与用户业务的关联点。只引用数据中出现的公司。
+返回JSON: [{"company":"公司名","relevance":"高/中/低","reason":"关联原因20字内","talent_count":人数}]`;
+
+  let companyRelevance = [];
+  try {
+    const relRaw = await callDeepSeek(relevancePrompt, 400, 0.1);
+    companyRelevance = JSON.parse(relRaw.trim().replace(/```json?|```/g, ''));
+  } catch(e) {
+    companyRelevance = companies.map(c => ({ company: c, relevance: '中', reason: '数据中出现', talent_count: talents.filter(t => t.current_company === c).length }));
+  }
+  // Sort by relevance then talent count
+  const relOrder = { '高': 0, '中': 1, '低': 2 };
+  companyRelevance.sort((a, b) => (relOrder[a.relevance]||1) - (relOrder[b.relevance]||1) || (b.talent_count||0) - (a.talent_count||0));
+  const topRelevant = companyRelevance.slice(0, 6).map(c =>
+    `${c.company}(${c.relevance}相关): ${c.reason} | 候选人${c.talent_count||0}人`
+  ).join('\n');
+
+  // Phase 3: Full persona + recommendation
+  const prompt = `你是资深猎头顾问。根据客户需求和市场数据，输出以下内容：
+
+## 客户需求
 ${question}
+
+## 公司相关性排序(高→低)
+${topRelevant}
 
 ## 市场数据
 候选人(${talents.length}人): ${talentSummary}
 JD(${jds.length}条): ${jdSummary}
-公司人才特征: ${companyTalentMap}
 技能热度: ${skillExtract}
 
 ## 任务
 
-### 1. 业务对标分析
-从数据中找出与客户业务相关的公司。每家公司：他们在做什么 → 为什么员工可能是目标人选。只引用数据中的公司和岗位。
+### 1. 业务对标 & 公司优先级
+按相关性排序列出与客户业务最匹配的公司。每家公司: 他们在做什么、为什么值得挖、相关性级别。如果近期有这些公司的人出来可以着重挖掘。
 
 ### 2. 能力要求提炼
-这些公司JD看重什么能力？总结3-5个核心维度(技术+业务+软技能)。引用JD数据点。
+这些对标公司JD最看重什么能力？分3-5个维度(技术+业务+软技能)，引用具体JD数据。
 
-### 3. 理想候选人画像
-一句话定位 + 硬技能清单 + 软技能 + 理想背景(从哪些公司、什么级别、主导过什么项目)。
+### 3. 分层候选人画像
+根据客户需求，如果能判断层级，按画像分层(如0-1搭建型/平台级负责人/解决方案型)。每层: 硬性背景标签+核心能力+适配场景。如果信息不足以分层，给出一个综合画像。
 
 ### 4. 挖猎策略
-推荐2-3家优先挖猎公司 + 优势 + 面试评估要点。
+推荐2-3家优先挖猎公司 + 每家的优势和风险 + 面试评估要点 + 建议的筛选标准(什么背景直接不看)。
 
 ## 规则
-- 只基于数据推理，数据不足处标注「建议后续定向搜索」
-- 不编造公司、候选人、数字
-- 输出HTML body内容，深色主题风格(背景#151525,文字#f5f5f5,金色#f59e0b强调,卡片rgba(255,255,255,.03)毛玻璃)
-- 用h3做段落标题(金色),p做正文,ul/li做列表
-- 卡片: background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px`;
+- 只基于数据和用户描述推理，不编造
+- 数据不足处诚实标注「建议定向搜索确认」
+- 公司相关性排序是重要参考: 高相关公司的人才优先推荐
+- 输出HTML body，深色主题(#151525背景,#f5f5f5文字,#f59e0b强调,卡片毛玻璃)
+- h3金色标题, p正文, ul/li列表, 卡片:background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px`;
 
-  const answer = await callDeepSeek(prompt, 2000, 0.3);
+  const answer = await callDeepSeek(prompt, 2500, 0.3);
   return formatAnswer(answer, []);
 }
 
