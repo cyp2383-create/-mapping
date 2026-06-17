@@ -20,7 +20,8 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .hero p{font-size:16px;color:var(--text-secondary);margin-top:12px}
 .container{max-width:1040px;margin:0 auto;padding:0 24px 40px}
 .card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:var(--r);margin-bottom:20px}
-.input-card{padding:24px}
+.card-hd{display:flex;align-items:center;gap:8px;padding:16px 24px;font-size:14px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.card-hd-num{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-secondary);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .input-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .input-group{flex:1;min-width:150px}
 .input-group label{display:block;font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
@@ -39,14 +40,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease}
 .progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px}
 /* ===== Dashboard ===== */
-.dash-card{padding:0}
-.dash-header{display:flex;align-items:center;gap:8px;padding:14px 24px;border-bottom:1px solid var(--border)}
-.dash-dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex-shrink:0}
-.dash-dot.active{background:#f59e0b;box-shadow:0 0 8px var(--accent-glow);animation:pulse 1.2s ease-in-out infinite}
-.dash-dot.done{background:#10b981}
+.dash-card .card-hd{border-bottom:none;padding-bottom:8px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.dash-title{font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
-.dash-body{display:flex;align-items:stretch;padding:18px 24px;gap:0}
+.dash-body{display:flex;align-items:stretch;padding:4px 24px 20px;gap:0}
 .dash-step{display:flex;gap:10px;flex:1;min-width:0}
 .ds-indicator{display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;width:26px}
 .ds-num{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.06);color:var(--text-muted);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .3s}
@@ -123,8 +119,10 @@ tr:hover td{background:var(--surface-hover)}
 
 <div class="container">
 
-<div class="card input-card">
-  <div class="input-row">
+<!-- ① 需求配置 -->
+<div class="card">
+  <div class="card-hd"><span class="card-hd-num">1</span>需求配置</div>
+  <div class="input-row" style="padding:0 24px 24px">
     <div class="input-group"><label>行业</label><input id="industry" placeholder="互联网行业" value="互联网行业"></div>
     <div class="input-group"><label>岗位</label><input id="role" placeholder="AI产品经理" value="AI产品经理"></div>
     <div class="input-group" style="max-width:120px"><label>城市(可选)</label><input id="city" placeholder="北京"></div>
@@ -133,55 +131,41 @@ tr:hover td{background:var(--surface-hover)}
   <div class="progress" id="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div><div class="progress-text" id="progressText">准备中...</div></div>
 </div>
 
+<!-- ② Agent 运行看板 -->
 <div class="card dash-card" id="dashCard">
-  <div class="dash-header"><span class="dash-dot" id="dashStatus"></span><span class="dash-title">Agent 运行看板</span></div>
+  <div class="card-hd"><span class="card-hd-num">2</span>Agent 运行看板<span style="margin-left:auto;display:flex;gap:8px"><button class="btn btn-ghost btn-sm" id="btnOpenReport" onclick="openReport()" style="color:var(--text-secondary);font-weight:600">📊 暂无报告</button><button class="btn btn-ghost btn-sm" id="btnDownloadReport" onclick="downloadReport()" style="color:#10b981;font-weight:600;display:none">⬇ 下载</button><button class="btn btn-ghost btn-sm" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:600;display:none">🔄 重新生成</button></span></div>
   <div class="dash-body">
-    <div class="dash-step" id="ds1">
-      <div class="ds-indicator"><span class="ds-num">1</span><div class="ds-line"></div></div>
-      <div class="ds-content"><span class="ds-title">输入需求</span><span class="ds-sub" id="ds1Sub">等待输入</span></div>
-    </div>
-    <div class="dash-step" id="ds2">
-      <div class="ds-indicator"><span class="ds-num">2</span><div class="ds-line"></div></div>
-      <div class="ds-content"><span class="ds-title">Agent搜索</span><span class="ds-sub" id="ds2Sub">等待数据</span></div>
-    </div>
-    <div class="dash-step" id="ds3">
-      <div class="ds-indicator"><span class="ds-num">3</span></div>
-      <div class="ds-content">
-        <span class="ds-title">AI分析</span>
-        <div class="ds-branches">
-          <span class="ds-br" id="dsChat">💬 追问顾问 — 描述业务，构建人才画像</span>
-          <span class="ds-br" id="dsReport">📊 人才报告 — 解读市场趋势，定义人才标准</span>
-        </div>
-      </div>
-    </div>
+    <div class="dash-step" id="ds1"><div class="ds-indicator"><span class="ds-num">1</span><div class="ds-line"></div></div><div class="ds-content"><span class="ds-title">输入需求</span><span class="ds-sub" id="ds1Sub">等待输入</span></div></div>
+    <div class="dash-step" id="ds2"><div class="ds-indicator"><span class="ds-num">2</span><div class="ds-line"></div></div><div class="ds-content"><span class="ds-title">Agent搜索</span><span class="ds-sub" id="ds2Sub">等待数据</span></div></div>
+    <div class="dash-step" id="ds3"><div class="ds-indicator"><span class="ds-num">3</span></div><div class="ds-content"><span class="ds-title">AI分析</span><div class="ds-branches"><span class="ds-br" id="dsChat">💬 追问 — 待对话</span><span class="ds-br" id="dsReport">📊 报告 — 待生成</span></div></div></div>
   </div>
 </div>
 
-<div class="card" id="results" style="display:none">
-  <div class="tabs">
-    <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">收集到的候选人<span id="tBadge" style="display:none"></span></button>
-    <button class="tab" id="tabBtn-jds" onclick="switchTab('jds')">收集到的招聘JD<span id="jBadge" style="display:none"></span></button>
-    <button class="tab" id="tabBtn-chat" onclick="switchTab('chat')">追问 & 智能匹配</button>
-    <span style="flex:1"></span>
-    <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">🔄 重新生成</button>
-    <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:var(--text-secondary);font-weight:700">📊 暂无报告</button>
-    <button class="tab" id="btnDownloadReport" onclick="downloadReport()" style="color:#10b981;font-weight:700;display:none">下载报告</button>
-  </div>
-  <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
-  <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
-  <div class="tab-content" id="tab-chat">
+<!-- ③ 猎头顾问 -->
+<div class="card" id="chatCard" style="display:none">
+  <div class="card-hd"><span class="card-hd-num">3</span>猎头顾问</div>
+  <div style="padding:0 24px 16px">
     <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>我手上有刚才搜索到的市场数据，先聊聊你的业务情况吧——<br><br><span style="color:#f59e0b">你在做什么方向？想招一个什么样的人？</span></div></div>
     <div id="reportOffer" style="display:none;padding:8px 0;text-align:center"><button class="btn btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);font-size:13px" onclick="generatePersonaReport()">📋 生成人才画像报告</button><span style="font-size:11px;color:var(--text-secondary);margin-left:8px" id="reportOfferHint"></span></div>
-    <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快捷提问:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在AI方面有什么动向？')">大厂AI动向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('从哪家公司挖人最适合我的业务？')">挖人建议</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('帮我分析一下这个岗位需要什么核心能力？')">能力画像</button></div>
-    <div class="chat-input-row"><input id="chatInput" placeholder="描述你的业务场景，我来帮你构建人才画像..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
+    <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快捷回复:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在AI方面有什么动向？')">大厂AI动向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('从哪家公司挖人最适合我的业务？')">挖人建议</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('这个岗位需要什么核心能力？')">能力画像</button></div>
+    <div class="chat-input-row"><input id="chatInput" placeholder="描述你的业务场景..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
   </div>
 </div>
 
+<!-- ④ 人才数据库 -->
+<div class="card" id="dbCard" style="display:none">
+  <div class="card-hd"><span class="card-hd-num">4</span>人才数据库</div>
+  <div class="tabs"><button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">候选人<span id="tBadge" style="display:none"></span></button><button class="tab" id="tabBtn-jds" onclick="switchTab('jds')">招聘JD<span id="jBadge" style="display:none"></span></button></div>
+  <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
+</div>
+
+<!-- 历史报告 -->
 <div class="card" id="historyCard">
-  <div style="padding:20px 24px;border-bottom:1px solid var(--border)"><span style="font-size:15px;font-weight:600">历史报告</span></div>
+  <div class="card-hd">历史报告</div>
   <div style="padding:0 24px" id="historyList"><div class="empty">加载中...</div></div>
 </div>
-<div class="footer">Tavily · LinkedIn · GitHub · DeepSeek · Powered by AI</div>
+<div class="footer">Tavily · LinkedIn · GitHub · DeepSeek · Powered by AI<span style="margin-left:12px;color:var(--text-muted)">※ 候选人与JD数据由Tavily API实时搜索，单次上限约16位候选人/24条JD</span></div>
 </div>
 
 <script>
@@ -226,7 +210,8 @@ function updateWorkflow(step,sub){
     if(sub)document.getElementById('ds2Sub').textContent=sub;}
 }
 function showResults(data){
-  document.getElementById('results').style.display='';
+  document.getElementById('chatCard').style.display='';
+  document.getElementById('dbCard').style.display='';
   const tc=data.talents?.length||0, jc=data.jds?.length||0;
   const tBadge=document.getElementById('tBadge'), jBadge=document.getElementById('jBadge');
   if(tc>0){tBadge.textContent=tc;tBadge.style.display='inline';}else{tBadge.style.display='none';}
@@ -249,10 +234,10 @@ function showResults(data){
   switchTab('talents');loadHistory();
 }
 function switchTab(tab){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('#dbCard .tab').forEach(t=>t.classList.remove('active'));
   const tabEl=document.getElementById('tabBtn-'+tab);
   if(tabEl)tabEl.classList.add('active');
-  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('#dbCard .tab-content').forEach(el=>el.classList.remove('active'));
   const contentEl=document.getElementById('tab-'+tab);
   if(contentEl)contentEl.classList.add('active');
 }
