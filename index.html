@@ -142,7 +142,7 @@ tr:hover td{background:var(--surface-hover)}
       <span class="db-num">1</span><span class="db-title">需求配置</span><span class="db-sub" id="ds1Sub">等待输入</span>
     </div>
     <span class="db-connector">→</span>
-    <div class="dash-box" id="ds2" onclick="scrollToMod('modDash')">
+    <div class="dash-box" id="ds2" onclick="scrollToMod('dbCard')" style="cursor:pointer">
       <span class="db-num">2</span><span class="db-title">Agent搜索</span><span class="db-sub" id="ds2Sub">等待数据</span>
     </div>
     <span class="db-connector">→</span>
@@ -150,7 +150,7 @@ tr:hover td{background:var(--surface-hover)}
       <span class="db-num">3</span><span class="db-title">AI分析</span>
       <div class="db-branches">
         <div class="db-b-card" id="dsBChat" onclick="scrollToMod('chatCard')" style="cursor:pointer"><span class="db-b-head">💬 猎头顾问</span><span class="db-b-state" id="dsChatState">等待对话</span><span class="db-b-act" id="dsChatAct"></span></div>
-        <div class="db-b-card" id="dsBReport" onclick="scrollToMod('dbCard')" style="cursor:pointer"><span class="db-b-head">📊 人才报告</span><span class="db-b-state" id="dsReportState">等待生成</span><span class="db-b-act" id="dsReportAct"></span></div>
+        <div class="db-b-card" id="dsBReport"><span class="db-b-head">📊 人才报告</span><span class="db-b-state" id="dsReportState">等待生成</span><span class="db-b-act" id="dsReportAct"></span></div>
       </div>
     </div>
   </div>
