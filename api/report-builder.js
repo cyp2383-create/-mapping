@@ -37,16 +37,15 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 任务:
 
 ### 1. trend_summary
-推断2年前该岗位主流技能，对比当前变化。用一段话回答3个问题：
-- 以前需要什么？现在需要什么？
-- 什么在消失？什么在崛起？
-- **这对招聘意味着什么？**(最重要——用户看报告的目的是指导挖人决策)
+用一段话回答: 以前需要什么？现在需要什么？这对招聘意味着什么？
+**将3-5个最核心的关键词用HTML粗体&lt;b&gt;标签包裹**, 帮助用户一眼定位重点。不要全段加粗,只标最关键的洞察词。
 
 ### 2. current_top
-从高频技能选TOP 8。每个skill必须用3-6字的具体描述，结合${industry}行业${role}岗位的上下文，让用户一眼看懂这个技能具体指什么。不能用单字泛词！
-正例: "商业化策略设计"、"AI动态定价"、"广告算法理解"、"ROI数据建模"
-反例: "产品"、"数据"、"AI"、"策略"、"分析"(这些太泛，用户看不懂)
-每个给一个热度权重分(0-100整数)。
+从高频技能选TOP 8。每个skill必须用3-6字具体描述,让用户一眼看懂。
+正例: "数字化采购平台搭建"、"AI辅助评标"、"供应商数据建模"
+反例: "采购"、"平台"、"数据"、"AI"(太泛,不合格)
+每个给一个热度权重分(0-100整数),分数必须参考JD高频技能数据中的实际出现频次,高频次=高分,不能随意编造。
+每个skill还要给出category分类: "通用能力"、"专业技能"、"工具技术" 三选一。
 
 ### 3. emerging (新增技能) - 必须列出至少5个，少于5个视为不合格
 最近12个月新出现的方向。每个skill同样必须用具体描述(3-8字)。推断2-3个细分方向。每个细分方向12字内说明为什么是趋势。
@@ -70,7 +69,7 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 返回JSON:
 {
   "trend_summary": "总结段落...",
-  "current_top": [{"skill":"技能","score":85}],
+  "current_top": [{"skill":"技能","score":85,"category":"专业技能"}],
   "emerging": [{"skill":"技能","sub_categories":["细分方向1","细分方向2"],"reason":"为什么这个方向对招聘决策重要(不是简单描述趋势，而是告诉用户这意味着什么)"}],
   "rising": [{"skill":"技能","sub_categories":["细分方向1","细分方向2"],"reason":"为什么这个上升方向值得关注，招聘时应重视什么"}],
   "declining": [{"skill":"技能","reason":"需求下降的具体原因+意味着候选人如果只有这个技能将缺乏竞争力","evidence":"JD数据中观察到的具体替代信号或频次变化"}]
@@ -197,12 +196,15 @@ export function buildRedesignedReportHTML(skills, trend, tiers, talents, highN, 
   const safeTiers = tiers || {};
   const safeLabels = safeTiers.horizontal_labels || { high: '高端人才', mid: '中端人才', low: '入门人才' };
 
-  // Bar chart
+  // Bar chart with category-based colors
+  const catColors = { '通用能力': '#f59e0b', '专业技能': '#10b981', '工具技术': '#6366f1' };
   const barChart = topSkills.map((s, i) => {
     const pct = Math.max(5, Math.min(100, s.score || 50));
+    const c = catColors[s.category] || catColors['专业技能'];
+    const catLabel = s.category ? `<span class="bar-cat" style="background:${c}22;color:${c};border:1px solid ${c}33">${s.category}</span>` : '';
     return `<div class="bar-row">
-      <span class="bar-label">${s.skill}</span>
-      <div class="bar-track"><div class="bar-fill bar-c${i%5}" style="width:${pct}%"></div></div>
+      <span class="bar-label">${s.skill}${catLabel}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div>
       <span class="bar-val">${pct}</span>
     </div>`;
   }).join('');
@@ -275,11 +277,7 @@ h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 .bar-label{width:120px;text-align:right;font-size:12px;color:#e0e0e0;flex-shrink:0;font-weight:500}
 .bar-track{flex:1;height:20px;background:rgba(255,255,255,.06);border-radius:10px;overflow:hidden}
 .bar-fill{height:100%;border-radius:10px;min-width:4px}
-.bar-c0{background:linear-gradient(90deg,#10b981,#34d399)}
-.bar-c1{background:linear-gradient(90deg,#6366f1,#818cf8)}
-.bar-c2{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
-.bar-c3{background:linear-gradient(90deg,#ec4899,#f472b6)}
-.bar-c4{background:linear-gradient(90deg,#06b6d4,#22d3ee)}
+.bar-cat{display:inline-block;font-size:9px;padding:0 5px;border-radius:8px;margin-left:4px;font-weight:500;vertical-align:middle}
 .bar-val{width:36px;font-size:12px;color:#a8a8a8;text-align:left;font-weight:600}
 
 /* ===== Trend Detail ===== */
