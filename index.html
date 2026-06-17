@@ -38,28 +38,37 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease}
 .progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px}
-/* ===== Workflow Card ===== */
-.wf-card{padding:0}
-.wf-card .wf-row{padding:18px 24px}
+/* ===== Dashboard ===== */
+.dash-card{padding:0}
+.dash-header{display:flex;align-items:center;gap:8px;padding:14px 24px;border-bottom:1px solid var(--border)}
+.dash-dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex-shrink:0}
+.dash-dot.active{background:#f59e0b;box-shadow:0 0 8px var(--accent-glow);animation:pulse 1.2s ease-in-out infinite}
+.dash-dot.done{background:#10b981}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.dash-title{font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px}
+.dash-body{display:flex;align-items:stretch;padding:18px 24px;gap:0}
+.dash-step{display:flex;gap:10px;flex:1;min-width:0}
+.ds-indicator{display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;width:26px}
+.ds-num{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.06);color:var(--text-muted);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .3s}
+.ds-line{flex:1;width:2px;min-height:20px;background:rgba(255,255,255,.04);margin:4px 0;border-radius:1px}
+.ds-content{display:flex;flex-direction:column;gap:3px;padding-top:2px;flex:1;min-width:0}
+.ds-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.3}
+.ds-sub{font-size:11px;color:var(--text-muted);line-height:1.5;word-break:break-word}
+.ds-branches{display:flex;flex-direction:column;gap:3px}
+.ds-br{font-size:11px;color:var(--text-muted);line-height:1.5;transition:color .3s}
 
-/* ===== Workflow Row ===== */
-.wf-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
-.wf-step{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:12px 18px;min-width:140px;transition:all .3s}
-.wf-step.active{border-color:var(--accent);background:rgba(245,158,11,.06);box-shadow:0 0 12px var(--accent-glow)}
-.wf-num{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-secondary);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.wf-step.active .wf-num{background:var(--accent);color:#0a0a0a}
-.wf-body{display:flex;flex-direction:column;gap:2px}
-.wf-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.3}
-.wf-sub{font-size:11px;color:var(--text-muted);line-height:1.4}
-.wf-step.active .wf-sub{color:var(--text-secondary)}
-.wf-arrow{font-size:18px;color:var(--text-muted);font-weight:300}
-.wf-branch{min-width:280px}
-.wf-branches{display:flex;flex-direction:column;gap:3px;margin-top:4px}
-.wf-br{font-size:11px;color:var(--text-muted);line-height:1.5;padding:2px 0}
-.wf-br.done{color:var(--accent)}
+/* Step states */
+.dash-step.done .ds-num{background:#10b981;color:#fff}
+.dash-step.done .ds-line{background:rgba(16,185,129,.2)}
+.dash-step.done .ds-title{color:#10b981}
+.dash-step.active .ds-num{background:var(--accent);color:#0a0a0a;animation:pulse 1.2s ease-in-out infinite}
+.dash-step.active .ds-sub{color:var(--text-secondary)}
+.dash-step.active .ds-line{background:rgba(245,158,11,.2)}
+.ds-br.active{color:#f59e0b;font-weight:500}
+.ds-br.done{color:#10b981}
+
+/* Tab badges */
 .tab .tcnt{font-size:11px;background:rgba(245,158,11,.15);color:#fcd34d;padding:1px 7px;border-radius:20px;margin-left:4px;font-weight:600}
-.wf-step.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.04)}
-.wf-step.done .wf-num{background:#10b981;color:#fff}
 .tabs{display:flex;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);padding:0 4px}
 .tab{padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text-secondary);transition:all .15s;font-family:inherit;border-bottom:2px solid transparent}
 .tab:hover{color:var(--text)}
@@ -98,7 +107,7 @@ tr:hover td{background:var(--surface-hover)}
 .history-meta{font-size:12px;color:var(--text-secondary)}
 .empty{text-align:center;padding:48px;color:var(--text-muted);font-size:14px}
 .footer{text-align:center;padding:40px;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border)}
-@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}.wf-row{flex-direction:column;gap:6px}.wf-arrow{transform:rotate(90deg)}.wf-step,.wf-branch{min-width:auto;width:100%}}
+@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}.dash-body{flex-direction:column;gap:12px}.ds-line{min-height:12px}}
 </style>
 </head>
 <body>
@@ -124,13 +133,27 @@ tr:hover td{background:var(--surface-hover)}
   <div class="progress" id="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div><div class="progress-text" id="progressText">准备中...</div></div>
 </div>
 
-<div class="card wf-card" id="wfCard">
-  <div class="wf-row" id="wfRow">
-    <div class="wf-step" id="wfStep1"><span class="wf-num">1</span><div class="wf-body"><span class="wf-title">输入需求</span><span class="wf-sub">行业 + 岗位</span></div></div>
-    <span class="wf-arrow">→</span>
-    <div class="wf-step" id="wfStep2"><span class="wf-num">2</span><div class="wf-body"><span class="wf-title">Agent搜索</span><span class="wf-sub" id="wfSearchSub">等待输入</span></div></div>
-    <span class="wf-arrow">→</span>
-    <div class="wf-step wf-branch" id="wfStep3"><span class="wf-num">3</span><div class="wf-body"><span class="wf-title">AI分析</span><div class="wf-branches"><span class="wf-br" id="wfChat">💬 追问顾问 — 描述业务场景，精准构建人才画像</span><span class="wf-br" id="wfReport">📊 人才报告 — 解读市场趋势，定义人才标准</span></div></div></div>
+<div class="card dash-card" id="dashCard">
+  <div class="dash-header"><span class="dash-dot" id="dashStatus"></span><span class="dash-title">Agent 运行看板</span></div>
+  <div class="dash-body">
+    <div class="dash-step" id="ds1">
+      <div class="ds-indicator"><span class="ds-num">1</span><div class="ds-line"></div></div>
+      <div class="ds-content"><span class="ds-title">输入需求</span><span class="ds-sub" id="ds1Sub">等待输入</span></div>
+    </div>
+    <div class="dash-step" id="ds2">
+      <div class="ds-indicator"><span class="ds-num">2</span><div class="ds-line"></div></div>
+      <div class="ds-content"><span class="ds-title">Agent搜索</span><span class="ds-sub" id="ds2Sub">等待数据</span></div>
+    </div>
+    <div class="dash-step" id="ds3">
+      <div class="ds-indicator"><span class="ds-num">3</span></div>
+      <div class="ds-content">
+        <span class="ds-title">AI分析</span>
+        <div class="ds-branches">
+          <span class="ds-br" id="dsChat">💬 追问顾问 — 描述业务，构建人才画像</span>
+          <span class="ds-br" id="dsReport">📊 人才报告 — 解读市场趋势，定义人才标准</span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -184,8 +207,8 @@ async function startGenerate(){
           else if(d.step==='talents'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
           else if(d.step==='enrich'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
           else if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div>';showResults(d);}
-          else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('btnOpenReport').textContent='生成中...'+d.chars+'字';}
-          else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('wfChat').classList.add('done');document.getElementById('wfReport').classList.add('done');}
+          else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('btnOpenReport').textContent='生成中...'+d.chars+'字';document.getElementById('dsReport').textContent='📊 人才报告 — ⟳ '+d.text;}
+          else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsReport').classList.remove('active');document.getElementById('dsReport').classList.add('done');document.getElementById('dsReport').textContent='📊 人才报告 — ✓ 已完成';document.getElementById('dsChat').classList.add('done');document.getElementById('dsChat').textContent='💬 追问顾问 — 可追问';}
           else if(d.step==='error'){alert(d.text);}
           else{updateProgress(d.progress||50,d.text||'处理中...');}
         }catch(e){}
@@ -196,11 +219,10 @@ async function startGenerate(){
 }
 function updateProgress(pct,text){document.getElementById('progressFill').style.width=pct+'%';document.getElementById('progressText').textContent=text;}
 function updateWorkflow(step,sub){
-  // Activate workflow steps
-  if(step>=1) document.getElementById('wfStep1').classList.add('done');
-  if(step>=2){document.getElementById('wfStep2').classList.add('active');if(sub)document.getElementById('wfSearchSub').textContent=sub;}
-  if(step>=3){document.getElementById('wfStep2').classList.remove('active');document.getElementById('wfStep2').classList.add('done');document.getElementById('wfStep3').classList.add('active');
-    if(sub)document.getElementById('wfSearchSub').textContent=sub;}
+  if(step>=1){document.getElementById('ds1').classList.add('done');document.getElementById('ds1Sub').textContent='已确认';}
+  if(step>=2){document.getElementById('ds2').classList.add('active');if(sub)document.getElementById('ds2Sub').textContent=sub;}
+  if(step>=3){document.getElementById('ds2').classList.remove('active');document.getElementById('ds2').classList.add('done');document.getElementById('ds3').classList.add('active');
+    if(sub)document.getElementById('ds2Sub').textContent=sub;}
 }
 function showResults(data){
   document.getElementById('results').style.display='';
@@ -212,8 +234,8 @@ function showResults(data){
   updateWorkflow(3, `采集 ${tc} 位候选人 · ${jc} 条JD · ${data.companies?.length||0} 家公司`);
   // Update AI branch details
   if(data.tier_stats){
-    document.getElementById('wfChat').innerHTML='💬 追问顾问 — 描述业务场景，精准构建人才画像';
-    document.getElementById('wfReport').innerHTML='📊 人才报告 — 解读市场趋势，定义人才标准';
+    document.getElementById('dsChat').innerHTML='💬 追问顾问 — 描述业务场景，精准构建人才画像';
+    document.getElementById('dsReport').innerHTML='📊 人才报告 — 解读市场趋势，定义人才标准';
   }
   const rb=document.getElementById('btnOpenReport');
   if(data.report_html&&data.report_html.length>100){rb.textContent='查看报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';document.getElementById('btnDownloadReport').style.display='';}else{rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';document.getElementById('btnDownloadReport').style.display='none';}
@@ -257,24 +279,39 @@ function loadChat(){const k=getChatKey();const saved=localStorage.getItem(k);if(
 async function sendChat(){
   const input=document.getElementById('chatInput');const q=input.value.trim();if(!q||!currentData)return;input.value='';
   const msgs=document.getElementById('chatMessages');msgs.innerHTML+=`<div class="chat-msg chat-user">${q}</div>`;saveChat();
+  // Dashboard: activate chat branch
+  document.getElementById('dsChat').classList.add('active');
+  document.getElementById('dsChat').textContent='💬 追问顾问 — ⟳ 分析中...';
   try{
     const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData,industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim()})});
-    const d=await resp.json();
-    let answer=d.answer||d.error||'抱歉，处理出错';
-    // If answer already contains HTML, use it directly; otherwise do markdown conversion
+    const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='',answer='',recs=[],sugs=[];
+    while(true){
+      const{value,done}=await reader.read();if(done)break;
+      buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
+      for(const line of lines){if(!line.startsWith('data: '))continue;
+        try{const d=JSON.parse(line.slice(6));
+          if(d.step==='progress'){document.getElementById('dsChat').textContent='💬 追问顾问 — ⟳ '+d.text;}
+          else if(d.step==='done'){
+            answer=d.answer||'';recs=d.recommendations||[];sugs=d.suggestions||[];
+            document.getElementById('dsChat').classList.remove('active');document.getElementById('dsChat').classList.add('done');
+            document.getElementById('dsChat').textContent='💬 追问顾问 — ✓ 已完成';
+          }
+          else if(d.step==='error'){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">${d.text}</div>`;saveChat();return;}
+        }catch(e){}
+      }
+    }
+    if(!answer){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">抱歉，追问服务无响应</div>`;saveChat();msgs.scrollTop=msgs.scrollHeight;return;}
+    // Render answer
     let isHtml=/<[a-z][\s\S]*>/i.test(answer);
-    if(!isHtml){
-      answer=answer.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/### (.+)/g,'<h4>$1</h4>').replace(/\n- /g,'\n· ');
-    }
+    if(!isHtml){answer=answer.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/### (.+)/g,'<h4>$1</h4>').replace(/\n- /g,'\n· ');}
     let extra='';
-    if(d.recommendations?.length){
-      extra='<div style="margin-top:8px;font-size:12px;color:#10b981">推荐候选人: '+d.recommendations.map(r=>`<span class="badge badge-green">${r.name}(${r.reason})</span>`).join(' ')+'</div>';
-    }
-    msgs.innerHTML+=`<div class="chat-msg chat-bot${d.recommendations?.length?' chat-recommend':''}"${isHtml?' style="max-width:95%"':''}>${answer}${extra}</div>`;saveChat();
-    if(d.suggestions?.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">继续追问:</span>'+d.suggestions.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
+    if(recs.length){extra='<div style="margin-top:8px;font-size:12px;color:#10b981">推荐候选人: '+recs.map(r=>`<span class="badge badge-green">${r.name}(${r.reason})</span>`).join(' ')+'</div>';}
+    msgs.innerHTML+=`<div class="chat-msg chat-bot${recs.length?' chat-recommend':''}"${isHtml?' style="max-width:95%"':''}>${answer}${extra}</div>`;saveChat();
+    if(sugs.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">继续追问:</span>'+sugs.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
   }catch(e){
-    msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">抱歉，追问服务暂时不可用，请稍后重试</div>`;
-    saveChat();
+    msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">抱歉，追问服务暂时不可用</div>`;saveChat();
+    document.getElementById('dsChat').classList.remove('active');
+    document.getElementById('dsChat').textContent='💬 追问顾问 — 描述业务，构建人才画像';
   }
   msgs.scrollTop=msgs.scrollHeight;
 }

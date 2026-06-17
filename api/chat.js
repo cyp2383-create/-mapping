@@ -1,48 +1,51 @@
-/** POST /api/chat — 猎头顾问角色: 业务场景 → 人才画像 + 挖猎策略 */
+/** POST /api/chat — SSE streaming 猎头顾问: 业务场景 → 人才画像 + 挖猎策略 */
+import { streamDeepSeek } from './report-builder.js';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin','*');
   if (req.method==='OPTIONS') return res.status(200).end();
   if (req.method!=='POST') return res.status(405).json({error:'POST only'});
 
+  // SSE headers
+  res.setHeader('Content-Type','text/event-stream');
+  res.setHeader('Cache-Control','no-cache');
+  res.setHeader('Connection','keep-alive');
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
   try {
     const { question, context } = req.body;
-    if (!question) return res.status(400).json({error:'Need question'});
+    if (!question) { send({step:'error',text:'Need question'}); res.end(); return; }
 
     const talents = context?.talents || [];
     const jds = context?.jds || [];
     const companies = [...new Set(talents.map(t=>t.current_company).filter(Boolean))].slice(0,12);
 
-    // ===== Intent Classification =====
+    // Intent detection
+    send({step:'progress',text:'正在分析你的问题...'});
     const intent = detectIntent(question, companies.length, talents.length);
 
     let result;
     switch (intent) {
       case 'business_scenario':
-        // 用户描述了自己的业务场景 → 构建人才画像
-        result = await handlePersonaBuilding(question, talents, jds, companies);
+        result = await handlePersonaBuilding(question, talents, jds, companies, send);
         break;
       case 'poaching':
-        // 用户问从哪里挖人 / 哪个公司好
-        result = await handlePoachingStrategy(question, talents, jds, companies);
+        result = await handlePoachingStrategy(question, talents, jds, companies, send);
         break;
       case 'company_analysis':
-        // 用户问大厂业务方向 / 公司对比
-        result = await handleCompanyAnalysis(question, talents, jds, companies);
+        result = await handleCompanyAnalysis(question, talents, jds, companies, send);
         break;
       case 'capability':
-        // 用户问需要什么能力 / 技能要求
-        result = await handleCapabilityAnalysis(question, talents, jds);
+        result = await handleCapabilityAnalysis(question, talents, jds, send);
         break;
       default:
-        // 通用问答 + 候选人匹配
-        result = await handleGeneralQA(question, talents, jds);
+        result = await handleGeneralQA(question, talents, jds, send);
     }
 
-    // Generate contextual follow-up suggestions
     result.suggestions = await generateSuggestions(question, intent, talents.length);
-
-    res.json(result);
-  } catch(e) { res.status(500).json({error:e.message, answer:'抱歉，处理请求时出错'}); }
+    send({step:'done', answer:result.answer, recommendations:result.recommendations||[], suggestions:result.suggestions||[]});
+    res.end();
+  } catch(e) { send({step:'error',text:e.message}); res.end(); }
 }
 
 // ========== Intent Detection ==========
@@ -92,13 +95,14 @@ function detectIntent(q) {
 
 // ========== Mode 1: 业务场景 → 人才画像 ==========
 
-async function handlePersonaBuilding(question, talents, jds, companies) {
+async function handlePersonaBuilding(question, talents, jds, companies, send) {
   const talentSummary = buildTalentSummary(talents);
   const jdSummary = buildJdSummary(jds);
   const companyTalentMap = buildCompanyTalentMap(talents);
   const skillExtract = extractKeySkills(jds);
 
   // Phase 1: Multi-dimensional needs assessment (5 dimensions)
+  send({step:'progress',text:'正在理解你的业务需求...'});
   const assessPrompt = `你是资深猎头顾问。用户在描述招聘需求。从以下5个维度评估信息完整度，每维度给出known(0-100分)和缺失的具体信息。
 
 用户描述: "${question}"
@@ -174,6 +178,7 @@ async function handlePersonaBuilding(question, talents, jds, companies) {
   }
 
   // Phase 2: Cross-reference collected companies for business relevance
+  send({step:'progress',text:'正在匹配市场数据...'});
   const relevancePrompt = `你是猎头顾问。根据用户业务场景，评估已收集的公司与用户需求的相关性。
 
 用户业务: "${question}"
@@ -196,7 +201,8 @@ async function handlePersonaBuilding(question, talents, jds, companies) {
     `${c.company}(${c.relevance}相关): ${c.reason} | 候选人${c.talent_count||0}人`
   ).join('\n');
 
-  // Phase 3: Full persona + recommendation
+  // Phase 3: Full persona + recommendation (stream chars progress)
+  send({step:'progress',text:'正在生成建议...0字'});
   const prompt = `你是资深猎头顾问。根据客户需求和市场数据，输出以下内容：
 
 ## 客户需求
@@ -231,13 +237,15 @@ JD(${jds.length}条): ${jdSummary}
 - 输出HTML body，深色主题(#151525背景,#f5f5f5文字,#f59e0b强调,卡片毛玻璃)
 - h3金色标题, p正文, ul/li列表, 卡片:background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px`;
 
-  const answer = await callDeepSeek(prompt, 2500, 0.3);
+  const answer = await streamDeepSeek(prompt, 2500, (chars) => {
+    send({step:'progress',text:`正在生成建议...${chars}字`});
+  });
   return formatAnswer(answer, []);
 }
 
 // ========== Mode 2: 挖猎策略 ==========
 
-async function handlePoachingStrategy(question, talents, jds, companies) {
+async function handlePoachingStrategy(question, talents, jds, companies, send) {
   const talentSummary = buildTalentSummary(talents);
   const jdSummary = buildJdSummary(jds);
   const companyList = companies.join('、');
@@ -272,7 +280,7 @@ JD市场情报: ${jdSummary}
 
 // ========== Mode 3: 公司业务分析 ==========
 
-async function handleCompanyAnalysis(question, talents, jds, companies) {
+async function handleCompanyAnalysis(question, talents, jds, companies, send) {
   const companyTalentMap = buildCompanyTalentMap(talents);
   const jdSummary = buildJdSummary(jds);
 
@@ -305,7 +313,7 @@ JD情报: ${jdSummary}
 
 // ========== Mode 4: 能力画像分析 ==========
 
-async function handleCapabilityAnalysis(question, talents, jds) {
+async function handleCapabilityAnalysis(question, talents, jds, send) {
   const skillExtract = extractKeySkills(jds);
   const jdSummary = buildJdSummary(jds);
   const talentSummary = buildTalentSummary(talents.slice(0, 10));
@@ -339,7 +347,7 @@ ${talentSummary}
 
 // ========== Mode 5: 通用问答 ==========
 
-async function handleGeneralQA(question, talents, jds) {
+async function handleGeneralQA(question, talents, jds, send) {
   const talentText = talents.slice(0,8).map(t =>
     `${t.name}|${t.current_company}|${t.current_title}`
   ).join('\n');
