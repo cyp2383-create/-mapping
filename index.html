@@ -103,13 +103,16 @@ tr:hover td{background:var(--surface-hover)}
 <div class="card" id="results" style="display:none">
   <div class="stats" id="statsRow"></div>
   <div class="tabs">
-    <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">候选人</button>
-    <button class="tab" id="tabBtn-jds" onclick="switchTab('jds')">招聘JD</button>
-    <button class="tab" id="tabBtn-chat" onclick="switchTab('chat')">追问</button>
+    <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">收集到的候选人</button>
+    <button class="tab" id="tabBtn-jds" onclick="switchTab('jds')">收集到的招聘JD</button>
+    <button class="tab" id="tabBtn-chat" onclick="switchTab('chat')">追问 & 智能匹配</button>
     <span style="flex:1"></span>
-    <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">重新生成报告</button>
-    <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:var(--text-secondary);font-weight:700">暂无报告</button>
+    <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">🔄 重新生成</button>
+    <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:var(--text-secondary);font-weight:700">📊 暂无报告</button>
     <button class="tab" id="btnDownloadReport" onclick="downloadReport()" style="color:#10b981;font-weight:700;display:none">下载报告</button>
+  </div>
+  <div style="padding:8px 24px;font-size:11px;color:var(--text-muted);display:flex;gap:16px;border-bottom:1px solid var(--border)">
+    <span>📋 左侧是Agent搜到的市场数据</span><span>💬 追问告诉Agent你的业务场景</span><span>📊 点击报告按钮生成人才地图</span>
   </div>
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
