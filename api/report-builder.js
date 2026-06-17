@@ -37,7 +37,10 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 任务:
 
 ### 1. trend_summary
-推断2年前该岗位主流技能，对比当前变化。用2-3句话的结论性段落描述整体趋势转变。
+推断2年前该岗位主流技能，对比当前变化。用一段话回答3个问题：
+- 以前需要什么？现在需要什么？
+- 什么在消失？什么在崛起？
+- **这对招聘意味着什么？**(最重要——用户看报告的目的是指导挖人决策)
 
 ### 2. current_top
 从高频技能选TOP 8。每个skill必须用3-6字的具体描述，结合${industry}行业${role}岗位的上下文，让用户一眼看懂这个技能具体指什么。不能用单字泛词！
@@ -68,9 +71,9 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 {
   "trend_summary": "总结段落...",
   "current_top": [{"skill":"技能","score":85}],
-  "emerging": [{"skill":"技能","sub_categories":["细分方向1","细分方向2"],"reason":"每个细分方向的市场信号，15字内"}],
-  "rising": [{"skill":"技能","sub_categories":["细分方向1","细分方向2"],"reason":"市场信号，15字内"}],
-  "declining": [{"skill":"技能","reason":"需求下降的具体原因","evidence":"JD数据中观察到的具体替代信号或频次变化"}]
+  "emerging": [{"skill":"技能","sub_categories":["细分方向1","细分方向2"],"reason":"为什么这个方向对招聘决策重要(不是简单描述趋势，而是告诉用户这意味着什么)"}],
+  "rising": [{"skill":"技能","sub_categories":["细分方向1","细分方向2"],"reason":"为什么这个上升方向值得关注，招聘时应重视什么"}],
+  "declining": [{"skill":"技能","reason":"需求下降的具体原因+意味着候选人如果只有这个技能将缺乏竞争力","evidence":"JD数据中观察到的具体替代信号或频次变化"}]
 }`;
 }
 
@@ -95,6 +98,10 @@ export function buildTierProfilesPrompt(talents, jds) {
 1. 不提学历、不提工作年限
 2. 聚焦: 技术能力深度、项目复杂度、业务理解力、领导力/影响力、思维结构化程度
 3. 项目示例必须引用JD数据中的真实业务场景，不能编造
+4. **每个能力和技能必须用3-6字具体描述**，不能用单字泛词(如不能只写"产品"、"数据"、"管理")
+   正例: "商业化策略设计"、"跨部门资源协调"、"ROI数据建模"
+   反例: "产品能力"、"数据分析"、"团队管理"
+5. project_example必须说清楚业务价值: "主导XX项目，通过XX手段实现了XX业务结果"
 
 ## 数据
 
