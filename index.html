@@ -16,7 +16,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .container,.hero{position:relative;z-index:1}
 .hero{text-align:center;padding:80px 24px 60px;background:radial-gradient(ellipse at 50% 0%,rgba(245,158,11,.08) 0%,transparent 60%)}
 .logo-wrap{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:4px}
-.hero h1{font-size:40px;font-weight:800;letter-spacing:-1px;background:linear-gradient(180deg,rgba(245,245,245,1) 0%,rgba(200,200,200,.9) 50%,rgba(160,160,160,.7) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 1px 0 rgba(255,255,255,.05),0 -1px 0 rgba(0,0,0,.3)}
+.hero h1{font-size:40px;font-weight:800;letter-spacing:-1px;background:linear-gradient(135deg,#ffffff 0%,#fbbf24 40%,#f59e0b 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 2px 8px rgba(245,158,11,.15))}
 .hero p{font-size:16px;color:var(--text-secondary);margin-top:12px}
 .container{max-width:1040px;margin:0 auto;padding:0 24px 40px}
 .card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:var(--r);margin-bottom:20px}
@@ -38,10 +38,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease}
 .progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;padding:24px}
-.stat-card{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:var(--r-sm);padding:20px;text-align:center}
-.stat-num{font-size:32px;font-weight:800;color:var(--accent);line-height:1}
-.stat-lbl{font-size:12px;color:var(--text-secondary);margin-top:6px}
+/* ===== Guide Row ===== */
+.guide-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:20px 24px;border-bottom:1px solid var(--border)}
+.guide-item{text-align:center;padding:12px 8px}
+.guide-icon{font-size:22px;display:block;margin-bottom:6px}
+.guide-title{font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:2px}
+.guide-desc{font-size:11px;color:var(--text-muted);line-height:1.5}
+.tab .tcnt{font-size:11px;background:rgba(245,158,11,.15);color:#fcd34d;padding:1px 7px;border-radius:20px;margin-left:4px;font-weight:600}
 .tabs{display:flex;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);padding:0 4px}
 .tab{padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text-secondary);transition:all .15s;font-family:inherit;border-bottom:2px solid transparent}
 .tab:hover{color:var(--text)}
@@ -80,7 +83,7 @@ tr:hover td{background:var(--surface-hover)}
 .history-meta{font-size:12px;color:var(--text-secondary)}
 .empty{text-align:center;padding:48px;color:var(--text-muted);font-size:14px}
 .footer{text-align:center;padding:40px;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border)}
-@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}}
+@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}.guide-row{grid-template-columns:repeat(2,1fr)}.guide-item{padding:8px 4px}}
 </style>
 </head>
 <body>
@@ -91,7 +94,7 @@ tr:hover td{background:var(--surface-hover)}
     <svg width="38" height="38" viewBox="0 0 48 48" fill="none"><defs><linearGradient id="lg" x1="4" y1="4" x2="44" y2="44"><stop offset="0%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#d97706"/></linearGradient><filter id="emboss"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".5"/><feDropShadow dx="0" dy="-1" stdDeviation="1" flood-color="#fff" flood-opacity=".08"/></filter></defs><rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="rgba(20,20,32,.8)" stroke="url(#lg)" stroke-width="2.5" filter="url(#emboss)"/><rect x="1.5" y="1.5" width="45" height="45" rx="12" fill="url(#lg)" opacity=".06"/><circle cx="24" cy="32" r="3" fill="url(#lg)"/><line x1="24" y1="28" x2="24" y2="16" stroke="url(#lg)" stroke-width="3.2" stroke-linecap="round"/><line x1="24" y1="16" x2="18" y2="24" stroke="url(#lg)" stroke-width="2.6" stroke-linecap="round"/><line x1="24" y1="16" x2="30" y2="24" stroke="url(#lg)" stroke-width="2.6" stroke-linecap="round"/></svg>
     <h1>人才地图Agent</h1>
   </div>
-  <p>AI驱动的人才地图 · 输入行业+岗位，一键生成人才画像报告</p>
+  <p>AI驱动的人才地图 — 输入行业+岗位，Agent自动搜索市场数据并生成人才画像报告</p>
 </div>
 
 <div class="container">
@@ -107,18 +110,20 @@ tr:hover td{background:var(--surface-hover)}
 </div>
 
 <div class="card" id="results" style="display:none">
-  <div class="stats" id="statsRow"></div>
+  <div class="guide-row" id="guideRow">
+    <div class="guide-item"><span class="guide-icon">🔍</span><span class="guide-title">Agent搜索</span><span class="guide-desc">Tavily + LinkedIn 实时采集市场候选人 & JD</span></div>
+    <div class="guide-item"><span class="guide-icon">🧠</span><span class="guide-title">AI推理</span><span class="guide-desc">DeepSeek 分析技能趋势 & 能力画像</span></div>
+    <div class="guide-item"><span class="guide-icon">💬</span><span class="guide-title">追问顾问</span><span class="guide-desc">描述业务场景，AI精准构建人才画像</span></div>
+    <div class="guide-item"><span class="guide-icon">📊</span><span class="guide-title">人才报告</span><span class="guide-desc">生成后可在线查看或下载HTML报告</span></div>
+  </div>
   <div class="tabs">
-    <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">收集到的候选人</button>
-    <button class="tab" id="tabBtn-jds" onclick="switchTab('jds')">收集到的招聘JD</button>
+    <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">收集到的候选人<span id="tBadge" style="display:none"></span></button>
+    <button class="tab" id="tabBtn-jds" onclick="switchTab('jds')">收集到的招聘JD<span id="jBadge" style="display:none"></span></button>
     <button class="tab" id="tabBtn-chat" onclick="switchTab('chat')">追问 & 智能匹配</button>
     <span style="flex:1"></span>
     <button class="tab" id="btnRegenReport" onclick="regenerateReport()" style="color:#10b981;font-weight:700;display:none">🔄 重新生成</button>
     <button class="tab" id="btnOpenReport" onclick="openReport()" style="color:var(--text-secondary);font-weight:700">📊 暂无报告</button>
     <button class="tab" id="btnDownloadReport" onclick="downloadReport()" style="color:#10b981;font-weight:700;display:none">下载报告</button>
-  </div>
-  <div style="padding:8px 24px;font-size:11px;color:var(--text-muted);display:flex;gap:16px;border-bottom:1px solid var(--border)">
-    <span>📋 左侧是Agent搜到的市场数据</span><span>💬 追问告诉Agent你的业务场景</span><span>📊 点击报告按钮生成人才地图</span>
   </div>
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
@@ -168,7 +173,19 @@ async function startGenerate(){
 function updateProgress(pct,text){document.getElementById('progressFill').style.width=pct+'%';document.getElementById('progressText').textContent=text;}
 function showResults(data){
   document.getElementById('results').style.display='';
-  document.getElementById('statsRow').innerHTML=`<div class="stat-card"><div class="stat-num">${data.talents?.length||0}</div><div class="stat-lbl">候选人</div></div><div class="stat-card"><div class="stat-num">${data.jds?.length||0}</div><div class="stat-lbl">招聘JD</div></div><div class="stat-card"><div class="stat-num">${data.companies?.length||0}</div><div class="stat-lbl">目标公司</div></div>${data.tier_stats?`<div class="stat-card"><div class="stat-num" style="color:#10b981">${data.tier_stats.high}</div><div class="stat-lbl">高端</div></div><div class="stat-card"><div class="stat-num" style="color:#f59e0b">${data.tier_stats.mid}</div><div class="stat-lbl">中端</div></div><div class="stat-card"><div class="stat-num" style="color:#ef4444">${data.tier_stats.low}</div><div class="stat-lbl">低端</div></div>`:''}`;
+  // Update tab badges with counts
+  const tc=data.talents?.length||0, jc=data.jds?.length||0;
+  const tBadge=document.getElementById('tBadge'), jBadge=document.getElementById('jBadge');
+  if(tc>0){tBadge.textContent=tc;tBadge.style.display='inline';}else{tBadge.style.display='none';}
+  if(jc>0){jBadge.textContent=jc;jBadge.style.display='inline';}else{jBadge.style.display='none';}
+  // Update guide row with tier breakdown
+  if(data.tier_stats){
+    document.getElementById('guideRow').innerHTML=`
+      <div class="guide-item"><span class="guide-icon">🔍</span><span class="guide-title">Agent搜索</span><span class="guide-desc">采集 ${tc} 位候选人 · ${jc} 条JD · ${data.companies?.length||0} 家公司</span></div>
+      <div class="guide-item"><span class="guide-icon">🧠</span><span class="guide-title">AI推理</span><span class="guide-desc">高端 <b style="color:#10b981">${data.tier_stats.high}</b> · 中端 <b style="color:#f59e0b">${data.tier_stats.mid}</b> · 入门 <b style="color:#6366f1">${data.tier_stats.low}</b></span></div>
+      <div class="guide-item"><span class="guide-icon">💬</span><span class="guide-title">追问顾问</span><span class="guide-desc">描述业务场景，AI精准构建人才画像</span></div>
+      <div class="guide-item"><span class="guide-icon">📊</span><span class="guide-title">人才报告</span><span class="guide-desc">生成后可在线查看或下载HTML报告</span></div>`;
+  }
   const rb=document.getElementById('btnOpenReport');
   if(data.report_html&&data.report_html.length>100){rb.textContent='查看报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';document.getElementById('btnDownloadReport').style.display='';}else{rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';document.getElementById('btnDownloadReport').style.display='none';}
   const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
