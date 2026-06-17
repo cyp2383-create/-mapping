@@ -149,8 +149,8 @@ tr:hover td{background:var(--surface-hover)}
     <div class="dash-box dash-box-wide" id="ds3">
       <span class="db-num">3</span><span class="db-title">AI分析</span>
       <div class="db-branches">
-        <div class="db-b-card" id="dsBChat"><span class="db-b-head">💬 猎头顾问</span><span class="db-b-state" id="dsChatState">等待对话</span><span class="db-b-act" id="dsChatAct"></span></div>
-        <div class="db-b-card" id="dsBReport"><span class="db-b-head">📊 人才报告</span><span class="db-b-state" id="dsReportState">等待生成</span><span class="db-b-act" id="dsReportAct"></span></div>
+        <div class="db-b-card" id="dsBChat" onclick="scrollToMod('chatCard')" style="cursor:pointer"><span class="db-b-head">💬 猎头顾问</span><span class="db-b-state" id="dsChatState">等待对话</span><span class="db-b-act" id="dsChatAct"></span></div>
+        <div class="db-b-card" id="dsBReport" onclick="scrollToMod('dbCard')" style="cursor:pointer"><span class="db-b-head">📊 人才报告</span><span class="db-b-state" id="dsReportState">等待生成</span><span class="db-b-act" id="dsReportAct"></span></div>
       </div>
     </div>
   </div>
@@ -250,6 +250,11 @@ function showResults(data){
     document.getElementById('dsReportState').textContent='已完成 ✓';
     document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981">下载</button>';
   }
+  // Populate tables
+  const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
+  (data.talents||[]).forEach(t=>{const tierBadge=t.tier==='high'?'<span class="badge badge-green">高</span>':t.tier==='mid'?'<span class="badge badge-yellow">中</span>':'<span class="badge badge-purple">低</span>';const infScore=t.influence_score?('⭐'.repeat(Math.min(5,Math.round(t.influence_score/2)))):'';tbody.innerHTML+=`<tr><td><strong>${t.name||'***'}</strong></td><td>${t.current_company||''}</td><td>${t.current_title||''}</td><td>${tierBadge}</td><td style="font-size:11px">${t.education||''}</td><td style="font-size:11px">${t.languages||''}</td><td>${infScore}</td><td>${t.contact_type||''}</td></tr>`;});
+  const jbody=document.querySelector('#jdTable tbody');jbody.innerHTML='';
+  (data.jds||[]).forEach(j=>{jbody.innerHTML+=`<tr><td><strong>${j.title||''}</strong></td><td>${j.company||''}</td><td>${j.salary||''}</td><td>${j.location||''}</td><td>${j.experience||''}</td><td><span class="badge badge-green">${j.source_platform||''}</span></td></tr>`;});
   const qDiv=document.getElementById('suggestedQuestions');
   if(data.questions?.length){qDiv.innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速提问:</span>'+data.questions.map(q=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${q}')">${q}</button>`).join('');}
   switchTab('talents');loadHistory();
