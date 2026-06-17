@@ -40,13 +40,16 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 推断2年前该岗位主流技能，对比当前变化。用2-3句话的结论性段落描述整体趋势转变。
 
 ### 2. current_top
-从高频技能选TOP 8，每个给一个热度权重分(0-100整数)。用于柱状图展示。
+从高频技能选TOP 8。每个skill必须用3-6字的具体描述，结合${industry}行业${role}岗位的上下文，让用户一眼看懂这个技能具体指什么。不能用单字泛词！
+正例: "商业化策略设计"、"AI动态定价"、"广告算法理解"、"ROI数据建模"
+反例: "产品"、"数据"、"AI"、"策略"、"分析"(这些太泛，用户看不懂)
+每个给一个热度权重分(0-100整数)。
 
-### 3. emerging (新增技能) - 至少5个
-最近12个月新出现的技能。每个技能推断1-3个细分方向(sub_categories)。每个细分方向15字内说明市场信号。
+### 3. emerging (新增技能) - 必须列出至少5个，少于5个视为不合格
+最近12个月新出现的方向。每个skill同样必须用具体描述(3-8字)。推断2-3个细分方向。每个细分方向12字内说明为什么是趋势。
 
-### 4. rising (上升技能) - 至少5个
-需求增速明显超过平均的技能。同样推断细分方向和市场信号。
+### 4. rising (上升技能) - 必须列出至少5个，少于5个视为不合格
+需求增速明显超过平均的方向。同样要求具体描述+细分方向。
 
 ### 5. declining (衰退技能)
 2年前热门但现在JD中需求明显下降的技能。
@@ -262,7 +265,7 @@ h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 /* ===== Bar Chart ===== */
 .bar-chart{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
 .bar-row{display:flex;align-items:center;gap:10px}
-.bar-label{width:100px;text-align:right;font-size:13px;color:#e0e0e0;flex-shrink:0;font-weight:500}
+.bar-label{width:120px;text-align:right;font-size:12px;color:#e0e0e0;flex-shrink:0;font-weight:500}
 .bar-track{flex:1;height:20px;background:rgba(255,255,255,.06);border-radius:10px;overflow:hidden}
 .bar-fill{height:100%;border-radius:10px;min-width:4px}
 .bar-c0{background:linear-gradient(90deg,#10b981,#34d399)}
