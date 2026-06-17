@@ -63,7 +63,7 @@ async function generateTrendAnalysis(currentSkills, talents, jds, send) {
 
   const resp=await fetch('https://api.deepseek.com/v1/chat/completions',{
     method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:1500,stream:true})
+    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:600,stream:true})
   });
   const reader=resp.body.getReader();const decoder=new TextDecoder();
   let buf='',full='',start=Date.now();
@@ -103,7 +103,7 @@ JD参考: ${jdText}
 
   const resp=await fetch('https://api.deepseek.com/v1/chat/completions',{
     method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:1500,stream:true})
+    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:600,stream:true})
   });
   const reader=resp.body.getReader();const decoder=new TextDecoder();
   let buf='',full='',start=Date.now();
