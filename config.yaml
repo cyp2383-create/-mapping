@@ -1,0 +1,84 @@
+# ============================================================
+# Talent Miner 配置文件
+# ============================================================
+
+# ---- 采集目标 ----
+targets:
+  # 目标公司列表（留空则使用 industry + keywords 搜索）
+  companies: []
+    # - 字节跳动
+    # - 美团
+    # - 快手
+  # 行业关键词
+  industry: "互联网-市场营销采购"
+  # 岗位关键词
+  job_keywords:
+    - "市场采购"
+    - "品牌采购"
+    - "营销采购"
+    - "新媒体采购"
+  # 目标城市（留空=全国）
+  cities:
+    - "北京"
+  # 薪资范围（月薪，留空=不限）
+  salary_min: 30000
+  salary_max: 0  # 0 = 不限
+
+# ---- 采集控制 ----
+collection:
+  # 每个平台每个公司最多采集人数
+  max_per_company: 50
+  # 单次运行最多采集总人数
+  max_total: 500
+  # 页面请求间隔（秒）
+  delay_min: 3
+  delay_max: 8
+
+# ---- 平台开关 ----
+# 每个平台首次使用需要先登录: python main.py --mode login --platform <name>
+platforms:
+  maimai:
+    enabled: true
+    cookie_file: "cookies/maimai.json"
+    note: "扫码登录。中国最大职业社交平台，1亿+用户"
+  boss:
+    enabled: false
+    cookie_file: "cookies/boss.json"
+    note: "手机验证码登录。招聘平台，可搜求职中的候选人(含期望薪资)"
+  linkedin:
+    enabled: false
+    cookie_file: "cookies/linkedin.json"
+    note: "邮箱密码登录。国际职业社交，适合外企/海外人才"
+  liepin:
+    enabled: true
+    cookie_file: "cookies/liepin.json"
+    note: "无需登录即可搜JD。中高端招聘平台，反爬弱"
+
+# ---- AI 提取 ----
+ai:
+  provider: "claude"  # claude | openai
+  model: "claude-sonnet-4-6"
+  max_tokens: 4096
+
+# ---- 联系方式 ----
+contact:
+  # Email 推测
+  email_enabled: true
+  email_domains:
+    字节跳动: "bytedance.com"
+    美团: "meituan.com"
+    快手: "kuaishou.com"
+    京东: "jd.com"
+    百度: "baidu.com"
+    腾讯: "tencent.com"
+    阿里巴巴: "alibaba-inc.com"
+    小红书: "xiaohongshu.com"
+    小米: "xiaomi.com"
+    滴滴: "didiglobal.com"
+  # Email 验证服务 (hunter / neverbounce / none)
+  email_verifier: "none"
+
+# ---- 导出 ----
+export:
+  format: "excel"  # excel | csv
+  output_dir: "data/exports"
