@@ -126,7 +126,7 @@ tr:hover td{background:var(--surface-hover)}
     <span class="wf-arrow">→</span>
     <div class="wf-step" id="wfStep2"><span class="wf-num">2</span><div class="wf-body"><span class="wf-title">Agent搜索</span><span class="wf-sub" id="wfSearchSub">等待输入</span></div></div>
     <span class="wf-arrow">→</span>
-    <div class="wf-step wf-branch" id="wfStep3"><span class="wf-num">3</span><div class="wf-body"><span class="wf-title">AI分析</span><div class="wf-branches"><span class="wf-br" id="wfChat">💬 追问顾问 — 描述业务场景，精准构建人才画像</span><span class="wf-br" id="wfReport">📊 人才报告 — 在线查看或下载</span></div></div></div>
+    <div class="wf-step wf-branch" id="wfStep3"><span class="wf-num">3</span><div class="wf-body"><span class="wf-title">AI分析</span><div class="wf-branches"><span class="wf-br" id="wfChat">💬 追问顾问 — 描述业务场景，精准构建人才画像</span><span class="wf-br" id="wfReport">📊 人才报告 — 解读市场趋势，定义人才标准</span></div></div></div>
   </div>
   <div class="tabs">
     <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">收集到的候选人<span id="tBadge" style="display:none"></span></button>
@@ -206,7 +206,7 @@ function showResults(data){
   // Update AI branch details
   if(data.tier_stats){
     document.getElementById('wfChat').innerHTML='💬 追问顾问 — 描述业务场景，精准构建人才画像';
-    document.getElementById('wfReport').innerHTML=`📊 人才报告 — 高端<b style="color:#10b981">${data.tier_stats.high}</b> · 中端<b style="color:#f59e0b">${data.tier_stats.mid}</b> · 入门<b style="color:#6366f1">${data.tier_stats.low}</b>`;
+    document.getElementById('wfReport').innerHTML='📊 人才报告 — 解读市场趋势，定义人才标准';
   }
   const rb=document.getElementById('btnOpenReport');
   if(data.report_html&&data.report_html.length>100){rb.textContent='查看报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';document.getElementById('btnDownloadReport').style.display='';}else{rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';document.getElementById('btnDownloadReport').style.display='none';}
