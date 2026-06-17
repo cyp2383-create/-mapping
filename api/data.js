@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   }
 
   if (list) {
-    const { rows, cols } = await query("SELECT id, name, industry, role_direction, created_at FROM positions ORDER BY created_at DESC");
+    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, created_at FROM positions ORDER BY created_at DESC");
     const positions = rows.map(r => {
       const obj = {};
       cols.forEach((c,i) => { try { obj[c] = r[i]?.value; } catch {} });
@@ -82,7 +82,16 @@ export default async function handler(req, res) {
     });
     let report_html = '';
     try { report_html = JSON.parse(obj.report_html || '""'); } catch {}
-    res.json({ talents, jds, industry, role, report_html });
+    // Compute derived fields so history loads with same shape as first-time generate
+    const tier_stats = { high: 0, mid: 0, low: 0 };
+    talents.forEach(t => {
+      if (t.tier === 'high') tier_stats.high++;
+      else if (t.tier === 'mid') tier_stats.mid++;
+      else tier_stats.low++;
+    });
+    const companies = [...new Set(talents.map(t => t.current_company).filter(Boolean))];
+    const questions = ['描述我的业务场景,帮我构建人才画像','从哪家公司挖人最适合我的业务?','这些大厂在AI方面有什么动向?'];
+    res.json({ talents, jds, industry, role, report_html, tier_stats, companies, questions });
     return;
   }
 
