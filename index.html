@@ -58,11 +58,17 @@ tr:hover td{background:var(--surface-hover)}
 .badge-yellow{background:rgba(245,158,11,.15);color:#fcd34d}
 .badge-purple{background:rgba(139,92,246,.15);color:#c4b5fd}
 .badge-blue{background:rgba(59,130,246,.15);color:#93c5fd}
-.chat-panel{max-height:400px;overflow-y:auto}
-.chat-msg{margin-bottom:12px;padding:12px 16px;border-radius:12px;font-size:14px;max-width:85%;line-height:1.8;white-space:pre-wrap;word-break:break-word}
+.chat-panel{max-height:420px;overflow-y:auto}
+.chat-msg{margin-bottom:12px;padding:14px 18px;border-radius:12px;font-size:14px;max-width:85%;line-height:1.8;word-break:break-word}
 .chat-msg strong{color:#fcd34d}
-.chat-msg h4{font-size:14px;margin:4px 0;color:#f59e0b}
-.chat-user{background:linear-gradient(135deg,#f59e0b,#d97706);color:#0a0a0a;margin-left:auto;font-weight:500;border-bottom-right-radius:4px}
+.chat-msg h4{font-size:15px;margin:8px 0 4px;color:#f59e0b}
+.chat-msg h3{font-size:16px;margin:10px 0 6px;color:#fbbf24}
+.chat-msg ul,.chat-msg ol{margin:4px 0;padding-left:18px}
+.chat-msg li{margin:2px 0;color:#e0e0e0}
+.chat-msg p{margin:4px 0}
+.chat-msg em{color:#a8a8a8;font-style:italic}
+.chat-msg .highlight{background:rgba(245,158,11,.1);border-left:3px solid #f59e0b;padding:8px 12px;border-radius:0 8px 8px 0;margin:8px 0;font-size:13px}
+.chat-user{background:linear-gradient(135deg,#f59e0b,#d97706);color:#0a0a0a;margin-left:auto;font-weight:500;border-bottom-right-radius:4px;white-space:pre-wrap}
 .chat-bot{background:var(--surface);border:1px solid var(--border);margin-right:auto;border-bottom-left-radius:4px}
 .chat-recommend{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2)}
 .chat-input-row{display:flex;gap:8px;margin-top:12px}
@@ -117,9 +123,9 @@ tr:hover td{background:var(--surface-hover)}
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-chat">
-    <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot">你好！我已经分析了市场数据。你可以问我:<br>· 这些大厂在做什么业务方向？<br>· 我的业务场景适合从哪家公司挖人？<br>· 帮我分析各公司挖人的优劣势。</div></div>
-    <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速提问:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在做什么业务方向？')">大厂业务方向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('我的业务适合从哪挖人？')">推荐挖人公司</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('各公司挖人优劣势？')">挖人优劣势</button></div>
-    <div class="chat-input-row"><input id="chatInput" placeholder="描述您的业务场景，获取智能推荐..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
+    <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div></div>
+    <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速提问:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在AI方面有什么动向？')">大厂AI动向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('从哪家公司挖人最适合我的业务？')">挖人建议</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('帮我分析一下这个岗位需要什么核心能力？')">能力画像</button></div>
+    <div class="chat-input-row"><input id="chatInput" placeholder="描述你的业务场景，我来帮你构建人才画像..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
   </div>
 </div>
 
@@ -148,7 +154,7 @@ async function startGenerate(){
       buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot">你好！我已经分析了市场数据。你可以问我:<br>· 这些大厂在做什么业务方向？<br>· 我的业务场景适合从哪家公司挖人？<br>· 帮我分析各公司挖人的优劣势。</div>';showResults(d);}
+          if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div>';showResults(d);}
           else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('btnOpenReport').textContent='生成中...'+d.chars+'字';}
           else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);}
           else if(d.step==='error'){alert(d.text);}
@@ -208,11 +214,17 @@ async function sendChat(){
   try{
     const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData,industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim()})});
     const d=await resp.json();
+    let answer=d.answer||d.error||'抱歉，处理出错';
+    // If answer already contains HTML, use it directly; otherwise do markdown conversion
+    let isHtml=/<[a-z][\s\S]*>/i.test(answer);
+    if(!isHtml){
+      answer=answer.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/### (.+)/g,'<h4>$1</h4>').replace(/\n- /g,'\n· ');
+    }
     let extra='';
     if(d.recommendations?.length){
       extra='<div style="margin-top:8px;font-size:12px;color:#10b981">推荐候选人: '+d.recommendations.map(r=>`<span class="badge badge-green">${r.name}(${r.reason})</span>`).join(' ')+'</div>';
     }
-    let md=(d.answer||d.error||'').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/### (.+)/g,'<h4>$1</h4>').replace(/\n- /g,'\n· ');msgs.innerHTML+=`<div class="chat-msg chat-bot${d.recommendations?.length?' chat-recommend':''}">${md}${extra}</div>`;saveChat();
+    msgs.innerHTML+=`<div class="chat-msg chat-bot${d.recommendations?.length?' chat-recommend':''}"${isHtml?' style="max-width:95%"':''}>${answer}${extra}</div>`;saveChat();
     if(d.suggestions?.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">继续追问:</span>'+d.suggestions.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
   }catch(e){}
   msgs.scrollTop=msgs.scrollHeight;

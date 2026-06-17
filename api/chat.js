@@ -1,4 +1,4 @@
-/** POST /api/chat — 智能追问: 数据推理 + 业务引导 + 挖人推荐 */
+/** POST /api/chat — 猎头顾问角色: 业务场景 → 人才画像 + 挖猎策略 */
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin','*');
   if (req.method==='OPTIONS') return res.status(200).end();
@@ -10,105 +10,425 @@ export default async function handler(req, res) {
 
     const talents = context?.talents || [];
     const jds = context?.jds || [];
-    const companies = [...new Set(talents.map(t=>t.current_company).filter(Boolean))].slice(0,10);
+    const companies = [...new Set(talents.map(t=>t.current_company).filter(Boolean))].slice(0,12);
 
-    // Detect intent: business inquiry
-    const isBusinessQ = /业务|方向|战略|转型|布局|做什么|发展|挖人|推荐|优势|劣势|哪个公司|哪家公司/.test(question);
+    // ===== Intent Classification =====
+    const intent = detectIntent(question, companies.length, talents.length);
 
-    if (isBusinessQ && companies.length > 0) {
-      // === Business Analysis Mode ===
-      const dataSummary = `候选人分布在${companies.length}家公司: ${companies.join(',')}。JD数据${jds.length}条。`;
-      const talentSample = talents.slice(0,8).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
+    let result;
+    switch (intent) {
+      case 'business_scenario':
+        // 用户描述了自己的业务场景 → 构建人才画像
+        result = await handlePersonaBuilding(question, talents, jds, companies);
+        break;
+      case 'poaching':
+        // 用户问从哪里挖人 / 哪个公司好
+        result = await handlePoachingStrategy(question, talents, jds, companies);
+        break;
+      case 'company_analysis':
+        // 用户问大厂业务方向 / 公司对比
+        result = await handleCompanyAnalysis(question, talents, jds, companies);
+        break;
+      case 'capability':
+        // 用户问需要什么能力 / 技能要求
+        result = await handleCapabilityAnalysis(question, talents, jds);
+        break;
+      default:
+        // 通用问答 + 候选人匹配
+        result = await handleGeneralQA(question, talents, jds);
+    }
 
-      const prompt = `你是企业战略分析师。基于以下招聘市场数据，分析主要大厂的业务方向和人才策略。
+    // Generate contextual follow-up suggestions
+    result.suggestions = await generateSuggestions(question, intent, talents.length);
+
+    res.json(result);
+  } catch(e) { res.status(500).json({error:e.message, answer:'抱歉，处理请求时出错'}); }
+}
+
+// ========== Intent Detection ==========
+
+function detectIntent(q) {
+  const t = q.toLowerCase();
+
+  // 业务场景描述：用户说"我们"/"我们部门"/"我们公司"在做/要做什么
+  const scenarioPatterns = [
+    /我们(部门|公司|团队|业务|现在|目前|要|想|在|正在|准备|打算)/,
+    /业务(场景|需求|方向|是)/,
+    /做.*(转型|升级|改造|优化|提效|降本|创新)/,
+    /招.*(负责|带队|从0|搭建|组建)/,
+    /需要.*(人才|什么样|能力|具备)/,
+    /帮.*(分析|看看|推荐|规划|画像)/,
+    /怎么.*(挖|找|招|搭)/,
+  ];
+  if (scenarioPatterns.some(p => p.test(t))) return 'business_scenario';
+
+  // 挖猎策略：从哪里/哪个公司/如何挖
+  const poachingPatterns = [
+    /(挖|招|找).*(哪里|哪个公司|哪家|推荐|优先)/,
+    /(哪个|哪些|什么)公司.*(挖|招|找|好|适合)/,
+    /(推荐|建议).*(挖|找|目标|公司)/,
+    /挖人.*(推荐|策略|目标|方向)/,
+  ];
+  if (poachingPatterns.some(p => p.test(t))) return 'poaching';
+
+  // 公司分析：大厂业务/方向/布局
+  const companyPatterns = [
+    /(大厂|公司|他们|字节|阿里|腾讯|美团|快手|京东).*(业务|方向|布局|战略|做|转型)/,
+    /(业务|方向|战略|转型|布局).*(大厂|公司|哪些|什么)/,
+    /(优势|劣势|对比|区别).*(公司|大厂)/,
+  ];
+  if (companyPatterns.some(p => p.test(t))) return 'company_analysis';
+
+  // 能力分析：需要什么技能/能力/经验
+  const capabilityPatterns = [
+    /(需要|要求|具备|掌握).*(什么|哪些).*(能力|技能|经验|背景)/,
+    /(能力|技能|经验).*(要求|画像|模型)/,
+    /什么样.*(人|人才|候选人|背景)/,
+  ];
+  if (capabilityPatterns.some(p => p.test(t))) return 'capability';
+
+  return 'general';
+}
+
+// ========== Mode 1: 业务场景 → 人才画像 ==========
+
+async function handlePersonaBuilding(question, talents, jds, companies) {
+  // Build rich data context from what we already collected
+  const talentSummary = buildTalentSummary(talents);
+  const jdSummary = buildJdSummary(jds);
+  const companyTalentMap = buildCompanyTalentMap(talents);
+  const skillExtract = extractKeySkills(jds);
+
+  const prompt = `你是资深猎头顾问，为客户构建精准的人才画像。
+
+## 你的角色
+你不是通用问答助手。你需要像资深猎头一样：分析客户的业务场景 → 从市场数据中找对标 → 构建可执行的人才画像和挖猎策略。
+
+## 客户的业务场景
+${question}
+
+## 已收集的市场数据
+
+### 候选人分布（${talents.length}人）
+${talentSummary}
+
+### 招聘JD关键信息（${jds.length}条）
+${jdSummary}
+
+### 各公司人才特征
+${companyTalentMap}
+
+### 市场技能热度
+${skillExtract}
+
+## 任务
+
+请按以下结构输出（用中文，语言专业像猎头顾问）：
+
+### 1. 业务对标分析
+- 从数据中找出哪些公司在做与客户业务相关的事
+- 每家公司写1-2句：他们在做什么、为什么他们的员工可能是目标人选
+- 只引用数据中出现的公司和岗位，不编造
+
+### 2. 目标公司能力提炼
+- 这些公司的JD在招人时看重什么能力？
+- 总结3-5个核心能力维度（技术+业务+软技能）
+- 引用具体的JD数据点
+
+### 3. 理想候选人画像
+- 一句话定位这个候选人
+- 能力清单（硬技能+软技能）
+- 理想的背景特征（从哪些公司、什么级别、主导过什么项目）
+
+### 4. 挖猎策略建议
+- 推荐2-3家重点挖猎的公司及优先级
+- 从每家挖人的优势是什么
+- 面试评估的要点（重点考察什么）
+
+## 规则
+- 只基于已有数据推理，数据不足处标注「建议后续定向搜索」
+- 不编造公司、候选人、具体数字
+- 如果用户描述的场景在现有数据中找不到直接对标，诚实说明并给出搜索方向建议
+- 输出用HTML格式(body内容)，专业简洁的卡片式布局，白色背景`;
+
+  const answer = await callDeepSeek(prompt, 2000, 0.3);
+  return formatAnswer(answer, []);
+}
+
+// ========== Mode 2: 挖猎策略 ==========
+
+async function handlePoachingStrategy(question, talents, jds, companies) {
+  const talentSummary = buildTalentSummary(talents);
+  const jdSummary = buildJdSummary(jds);
+  const companyList = companies.join('、');
+
+  const prompt = `你是资深猎头顾问，为客户提供挖猎策略建议。
+
+## 客户问题
+${question}
+
+## 市场数据
+候选人分布在${companies.length}家公司: ${companyList}
+候选人概况: ${talentSummary}
+JD市场情报: ${jdSummary}
+
+## 任务
+1. 基于数据推荐2-3家优先挖猎的公司，说明原因
+2. 从每家挖人的优势和潜在难度
+3. 建议的挖猎顺序和触达策略
+4. 如果数据不足以给出具体公司推荐，给出应该搜索什么方向
+
+## 规则
+- 只基于数据推理，不编造
+- 专业猎头口吻
+- HTML格式(body)，白色背景，卡片式布局`;
+
+  const answer = await callDeepSeek(prompt, 1500, 0.3);
+
+  // Match relevant candidates
+  const recs = await matchCandidates(question, talents);
+  return formatAnswer(answer, recs);
+}
+
+// ========== Mode 3: 公司业务分析 ==========
+
+async function handleCompanyAnalysis(question, talents, jds, companies) {
+  const companyTalentMap = buildCompanyTalentMap(talents);
+  const jdSummary = buildJdSummary(jds);
+
+  const prompt = `你是资深猎头顾问，为客户分析大厂的业务方向和人才策略。
+
+## 客户问题
+${question}
+
+## 市场数据
+${companyTalentMap}
+JD情报: ${jdSummary}
+
+## 任务
+1. 基于数据中出现的公司和岗位，推断各公司的业务重点
+2. 如果有明确的业务对标，指出哪些公司在做类似的事
+3. 各公司的招人偏好和能力要求差异
+4. 每家公司1-2句分析，聚焦对挖猎决策有帮助的信息
+
+## 规则
+- 只基于已有数据推理，不编造不存在的业务线
+- 不提及具体人数、金额等精确数字
+- HTML格式(body内容)，白色背景
+- 最后引导客户描述业务场景，以便进一步给出定向建议`;
+
+  const answer = await callDeepSeek(prompt, 1500, 0.3);
+
+  const recs = companyListFromAnswer(answer, companies);
+  return formatAnswer(answer, recs);
+}
+
+// ========== Mode 4: 能力画像分析 ==========
+
+async function handleCapabilityAnalysis(question, talents, jds) {
+  const skillExtract = extractKeySkills(jds);
+  const jdSummary = buildJdSummary(jds);
+  const talentSummary = buildTalentSummary(talents.slice(0, 10));
+
+  const prompt = `你是资深猎头顾问，为客户分析目标岗位的能力要求。
+
+## 客户问题
+${question}
+
+## 市场JD中的能力要求
+${skillExtract}
+${jdSummary}
+
+## 高端候选人能力特征
+${talentSummary}
+
+## 任务
+1. 从JD数据中提炼该岗位的核心能力要求（硬技能+软技能）
+2. 高端候选人与普通候选人的能力差异在哪
+3. 哪些能力是市场稀缺的（供给少但需求高）
+4. 如果用户业务有特殊需求，哪些能力需要额外重视
+
+## 规则
+- 只基于数据推理
+- 不编造具体能力或标准
+- HTML格式(body)，白色背景，卡片式布局`;
+
+  const answer = await callDeepSeek(prompt, 1500, 0.3);
+  return formatAnswer(answer, []);
+}
+
+// ========== Mode 5: 通用问答 ==========
+
+async function handleGeneralQA(question, talents, jds) {
+  const talentText = talents.slice(0,8).map(t =>
+    `${t.name}|${t.current_company}|${t.current_title}`
+  ).join('\n');
+
+  const hasEnoughData = talents.length >= 5;
+
+  const prompt = `你是资深猎头顾问，为客户解答招聘市场相关问题。
 
 核心规则:
-- 只基于数据中出现的公司和岗位推理，不编造不存在的业务线
-- 不提及具体人数、金额、规模等精确数字
-- 推理聚焦于业务方向、技术投入重点、人才偏好
-- 每个公司1-2句话
+- ${hasEnoughData ? '基于已收集的候选人数据回答问题，引用具体数据作为支撑' : '以"目前数据有限，我只能根据市场常识推理:"开头，不编造数据'}
+- 语言专业、务实，像猎头之间的交流
+- 如果用户的问题可以用数据回答，优先引用数据
 
-数据: ${dataSummary}
-候选人: ${talentSample}
+当前数据: ${talents.length}位候选人, ${jds.length}条JD
+候选人: ${talentText}
 用户问题: ${question}
 
-用中文回答, 300字以内。按以下结构:
-1. 数据观察到的大厂业务方向(基于JD和候选人来源推断)
-2. 引导用户"您的业务场景是什么? 我可以帮您分析从哪些公司挖人有优势"
-3. 如果用户已描述业务, 推荐2-3家公司并说明从每家挖人的优势和劣势`;
+用中文回答，300字以内。`;
 
-      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-        body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:800})
-      });
-      const d = await resp.json();
-      const answer = d.choices?.[0]?.message?.content || '抱歉';
+  const answer = await callDeepSeek(prompt, 600, 0.3);
+  const recs = await matchCandidates(question, talents);
+  return formatAnswer(answer, recs);
+}
 
-      // Generate follow-up suggestions
-      const sugPrompt = `基于用户问题"${question}", 生成3个引导用户描述其业务的追问(10字内)。JSON数组。`;
-      let suggestions = [];
-      try {
-        const sr = await fetch('https://api.deepseek.com/v1/chat/completions', {
-          method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-          body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:sugPrompt}],temperature:0.5,max_tokens:150})
-        });
-        const sd = await sr.json();
-        let st = sd.choices?.[0]?.message?.content?.trim() || '[]';
-        if (st.startsWith('```')) st = st.replace(/```json?|```/g,'');
-        suggestions = JSON.parse(st);
-      } catch(e) { suggestions = ["您的业务方向是?","团队规模和阶段?"]; }
+// ========== Helpers ==========
 
-      return res.json({ answer, suggestions, recommendations: [] });
-    }
+function buildTalentSummary(talents) {
+  const top = talents.slice(0, 12);
+  return top.map(t =>
+    `${t.name}|${t.current_company}|${t.current_title}|${t.level||''}|${t.education||''}|影响力:${t.influence_score||0}`
+  ).join('\n');
+}
 
-    // === Standard Q&A Mode ===
-    const dataSummary = `当前数据: ${talents.length}位候选人, ${jds.length}条JD。`;
-    const talentText = talents.slice(0,8).map(t => `${t.name}|${t.current_company}|${t.current_title}`).join('\n');
+function buildJdSummary(jds) {
+  const top = jds.slice(0, 10);
+  return top.map(j =>
+    `${j.title}|${j.company}|薪资:${j.salary||'?'}|经验:${j.experience||'?'}|工具:${j.tools||''}|${(j.snippet||'').substring(0,150)}`
+  ).join('\n');
+}
 
-    const answerPrompt = `你是人才分析助手。回答用户问题。
-核心规则:
-- 如果当前数据可以支撑回答, 引用具体候选人数据
-- 如果数据不足, 以"目前数据有限,我只能根据常识推理:"开头
-- 绝对不能编造不存在的数据或候选人
-${dataSummary} 候选人清单: ${talentText} 用户问题: ${question} 用中文回答, 200字以内。`;
+function buildCompanyTalentMap(talents) {
+  const map = {};
+  talents.forEach(t => {
+    const c = t.current_company || '未知';
+    if (!map[c]) map[c] = [];
+    map[c].push(`${t.current_title||'?'}(Lv:${t.level||'?'})`);
+  });
+  return Object.entries(map).slice(0, 10).map(([c, titles]) =>
+    `${c}: ${titles.slice(0,5).join(', ')}`
+  ).join('\n');
+}
 
-    const ansResp = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-      body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:answerPrompt}],temperature:0.3,max_tokens:500})
+function extractKeySkills(jds) {
+  const skills = {};
+  const keywords = [
+    'agent','rag','llm','prompt','ai','ml','python','sql','java','go','rust',
+    '产品','数据','模型','算法','架构','设计','运营','分析','开发','管理',
+    '系统','平台','大模型','gpt','transformer','微调','评测','a/b','增长',
+    '策略','安全','合规','风控','多模态','智能体','自动化','业务','行业',
+    '团队','领导','沟通','跨部门','项目管理','英语',
+  ];
+  keywords.forEach(k => {
+    let count = 0;
+    jds.forEach(j => {
+      if ((j.snippet||'').toLowerCase().includes(k) ||
+          (j.tools||'').toLowerCase().includes(k) ||
+          (j.title||'').toLowerCase().includes(k)) count++;
     });
-    const ansData = await ansResp.json();
-    const answer = ansData.choices?.[0]?.message?.content || '抱歉';
+    if (count > 0) skills[k] = count;
+  });
+  return Object.entries(skills)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 15)
+    .map(([k,v]) => `${k}(${v})`)
+    .join(', ');
+}
 
-    // Candidate matching
-    let recommendations = [];
-    if (talents.length > 0) {
-      const matchPrompt = `基于"${question}",从以下候选人推荐最匹配2人。JSON:[{"name":"","reason":"15字内"}] 无匹配返回[]。${talentText}`;
-      try {
-        const mr = await fetch('https://api.deepseek.com/v1/chat/completions', {
-          method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-          body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:matchPrompt}],temperature:0.1,max_tokens:250})
-        });
-        const md = await mr.json();
-        let mt = md.choices?.[0]?.message?.content?.trim() || '[]';
-        if (mt.startsWith('```')) mt = mt.replace(/```json?|```/g,'');
-        recommendations = JSON.parse(mt);
-      } catch(e) {}
-    }
+function formatAnswer(rawAnswer, recommendations) {
+  let html = rawAnswer.trim();
 
-    // Suggestions
-    let suggestions = [];
-    try {
-      const sp = `基于"${question}"和${talents.length}位候选人,生成3个追问(10字内)引导用户描述业务场景。JSON数组。`;
-      const sr = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-        body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:sp}],temperature:0.5,max_tokens:150})
-      });
-      const sd = await sr.json();
-      let st = sd.choices?.[0]?.message?.content?.trim() || '[]';
-      if (st.startsWith('```')) st = st.replace(/```json?|```/g,'');
-      suggestions = JSON.parse(st);
-    } catch(e) { suggestions = []; }
+  // Clean up markdown code blocks
+  if (html.startsWith('```html')) html = html.split('\n').slice(1).join('\n');
+  if (html.startsWith('```')) html = html.split('\n').slice(1).join('\n');
+  if (html.endsWith('```')) html = html.slice(0, -3);
 
-    res.json({ answer, recommendations, suggestions });
-  } catch(e) { res.status(500).json({error:e.message}); }
+  // If response is HTML already, use it; otherwise wrap in paragraphs
+  if (!html.includes('<') && !html.includes('&lt;')) {
+    html = html
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+    html = `<p>${html}</p>`;
+    // Bold markdown
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Headings
+    html = html.replace(/### (.+?)(?:<br>|$)/g, '<h4>$1</h4>');
+  }
+
+  // Ensure we only return body content
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  if (bodyMatch) html = bodyMatch[1];
+
+  return { answer: html, recommendations };
+}
+
+// ========== Candidate Matching ==========
+
+async function matchCandidates(question, talents) {
+  if (!talents.length) return [];
+  const talentText = talents.slice(0, 10).map(t =>
+    `${t.name}|${t.current_company}|${t.current_title}|${t.level||''}`
+  ).join('\n');
+
+  const prompt = `基于问题"${question}",从以下候选人推荐最匹配2人。JSON:[{"name":"","reason":"15字内"}]。无匹配返回[]。
+候选人: ${talentText}`;
+
+  try {
+    const raw = await callDeepSeek(prompt, 250, 0.1);
+    let t = raw.trim();
+    if (t.startsWith('```')) t = t.replace(/```json?|```/g, '');
+    return JSON.parse(t);
+  } catch(e) { return []; }
+}
+
+function companyListFromAnswer(answer, companies) {
+  // Extract company names from answer for recommendation display
+  return companies
+    .filter(c => answer.includes(c))
+    .slice(0, 3)
+    .map(c => ({ name: c, reason: '数据匹配' }));
+}
+
+// ========== Follow-up Suggestions ==========
+
+async function generateSuggestions(question, intent, talentCount) {
+  let prompt;
+  if (intent === 'business_scenario') {
+    prompt = `基于用户描述的业务场景"${question}"，生成3个追问（10字内），引导用户进一步细化需求（如：团队规模、目标级别、特殊要求、薪资范围等）。JSON数组。`;
+  } else if (talentCount === 0) {
+    prompt = `没有候选人数据时，生成3个引导用户先搜索数据的追问（10字内）。JSON数组。`;
+  } else {
+    prompt = `基于用户问题"${question}"和${talentCount}位候选人数据，生成3个追问（10字内），引导用户深入描述业务场景或挖猎方向。JSON数组。`;
+  }
+
+  try {
+    const raw = await callDeepSeek(prompt, 150, 0.5);
+    let t = raw.trim();
+    if (t.startsWith('```')) t = t.replace(/```json?|```/g, '');
+    return JSON.parse(t);
+  } catch(e) {
+    return ['你的业务阶段是?','目标候选人级别?','团队规模和预算?'];
+  }
+}
+
+// ========== DeepSeek API ==========
+
+async function callDeepSeek(prompt, maxTokens = 1500, temperature = 0.3) {
+  const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + process.env.DEEPSEEK_KEY
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      temperature,
+      max_tokens: maxTokens
+    })
+  });
+  const d = await resp.json();
+  return d.choices?.[0]?.message?.content || '';
 }
