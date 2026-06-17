@@ -38,8 +38,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease}
 .progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px}
+/* ===== Workflow Card ===== */
+.wf-card{padding:0}
+.wf-card .wf-row{padding:18px 24px}
+
 /* ===== Workflow Row ===== */
-.wf-row{display:flex;align-items:center;justify-content:center;gap:8px;padding:18px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.wf-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 .wf-step{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:12px 18px;min-width:140px;transition:all .3s}
 .wf-step.active{border-color:var(--accent);background:rgba(245,158,11,.06);box-shadow:0 0 12px var(--accent-glow)}
 .wf-num{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-secondary);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -120,7 +124,7 @@ tr:hover td{background:var(--surface-hover)}
   <div class="progress" id="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div><div class="progress-text" id="progressText">准备中...</div></div>
 </div>
 
-<div class="card" id="results" style="display:none">
+<div class="card wf-card" id="wfCard">
   <div class="wf-row" id="wfRow">
     <div class="wf-step" id="wfStep1"><span class="wf-num">1</span><div class="wf-body"><span class="wf-title">输入需求</span><span class="wf-sub">行业 + 岗位</span></div></div>
     <span class="wf-arrow">→</span>
@@ -128,6 +132,9 @@ tr:hover td{background:var(--surface-hover)}
     <span class="wf-arrow">→</span>
     <div class="wf-step wf-branch" id="wfStep3"><span class="wf-num">3</span><div class="wf-body"><span class="wf-title">AI分析</span><div class="wf-branches"><span class="wf-br" id="wfChat">💬 追问顾问 — 描述业务场景，精准构建人才画像</span><span class="wf-br" id="wfReport">📊 人才报告 — 解读市场趋势，定义人才标准</span></div></div></div>
   </div>
+</div>
+
+<div class="card" id="results" style="display:none">
   <div class="tabs">
     <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">收集到的候选人<span id="tBadge" style="display:none"></span></button>
     <button class="tab" id="tabBtn-jds" onclick="switchTab('jds')">收集到的招聘JD<span id="jBadge" style="display:none"></span></button>
@@ -172,7 +179,7 @@ async function startGenerate(){
       buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='companies'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);document.getElementById('results').style.display='';}
+          if(d.step==='companies'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
           else if(d.step==='jds'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
           else if(d.step==='talents'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
           else if(d.step==='enrich'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
@@ -265,7 +272,10 @@ async function sendChat(){
     }
     msgs.innerHTML+=`<div class="chat-msg chat-bot${d.recommendations?.length?' chat-recommend':''}"${isHtml?' style="max-width:95%"':''}>${answer}${extra}</div>`;saveChat();
     if(d.suggestions?.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">继续追问:</span>'+d.suggestions.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
-  }catch(e){}
+  }catch(e){
+    msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">抱歉，追问服务暂时不可用，请稍后重试</div>`;
+    saveChat();
+  }
   msgs.scrollTop=msgs.scrollHeight;
 }
 async function loadHistory(){
