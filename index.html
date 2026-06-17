@@ -170,8 +170,9 @@ tr:hover td{background:var(--surface-hover)}
   <div class="tab-content active" id="tab-talents"><div class="table-wrap"><table id="talentTable"><thead><tr><th>姓名</th><th>公司</th><th>职位</th><th>档位</th><th>教育</th><th>语言</th><th>影响力</th><th>联系</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-jds"><div class="table-wrap"><table id="jdTable"><thead><tr><th>职位</th><th>公司</th><th>薪资</th><th>地点</th><th>经验</th><th>来源</th></tr></thead><tbody></tbody></table></div></div>
   <div class="tab-content" id="tab-chat">
-    <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div></div>
-    <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快速提问:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在AI方面有什么动向？')">大厂AI动向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('从哪家公司挖人最适合我的业务？')">挖人建议</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('帮我分析一下这个岗位需要什么核心能力？')">能力画像</button></div>
+    <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>我手上有刚才搜索到的市场数据，先聊聊你的业务情况吧——<br><br><span style="color:#f59e0b">你在做什么方向？想招一个什么样的人？</span></div></div>
+    <div id="reportOffer" style="display:none;padding:8px 0;text-align:center"><button class="btn btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);font-size:13px" onclick="generatePersonaReport()">📋 生成人才画像报告</button><span style="font-size:11px;color:var(--text-secondary);margin-left:8px" id="reportOfferHint"></span></div>
+    <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快捷提问:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在AI方面有什么动向？')">大厂AI动向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('从哪家公司挖人最适合我的业务？')">挖人建议</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('帮我分析一下这个岗位需要什么核心能力？')">能力画像</button></div>
     <div class="chat-input-row"><input id="chatInput" placeholder="描述你的业务场景，我来帮你构建人才画像..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
   </div>
 </div>
@@ -206,7 +207,7 @@ async function startGenerate(){
           else if(d.step==='jds'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
           else if(d.step==='talents'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
           else if(d.step==='enrich'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
-          else if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div>';showResults(d);}
+          else if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>我手上有刚才搜索到的市场数据，先聊聊你的业务情况吧——<br><br><span style="color:#f59e0b">你在做什么方向？想招一个什么样的人？</span></div>';showResults(d);}
           else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('btnOpenReport').textContent='生成中...'+d.chars+'字';document.getElementById('dsReport').textContent='📊 人才报告 — ⟳ '+d.text;}
           else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsReport').classList.remove('active');document.getElementById('dsReport').classList.add('done');document.getElementById('dsReport').textContent='📊 人才报告 — ✓ 已完成';document.getElementById('dsChat').classList.add('done');document.getElementById('dsChat').textContent='💬 追问顾问 — 可追问';}
           else if(d.step==='error'){alert(d.text);}
@@ -276,15 +277,52 @@ function getChatKey(){return 'chat_'+((currentData&&currentData._posId)||'defaul
 function saveChat(){try{localStorage.setItem(getChatKey(),document.getElementById('chatMessages').innerHTML);}catch(e){}}
 function loadChat(){const k=getChatKey();const saved=localStorage.getItem(k);if(saved){document.getElementById('chatMessages').innerHTML=saved;document.getElementById('chatMessages').scrollTop=document.getElementById('chatMessages').scrollHeight;}}
 
+function buildChatHistory(){
+  const msgs=document.getElementById('chatMessages');
+  const history=[];
+  msgs.querySelectorAll('.chat-msg').forEach(el=>{
+    if(el.classList.contains('chat-user')) history.push({role:'user',content:el.textContent.trim()});
+    else if(el.classList.contains('chat-bot')) history.push({role:'assistant',content:el.textContent.trim().substring(0,200)});
+  });
+  return history;
+}
+
+async function generatePersonaReport(){
+  if(!currentData) return;
+  document.getElementById('reportOffer').style.display='none';
+  const msgs=document.getElementById('chatMessages');
+  msgs.innerHTML+=`<div class="chat-msg chat-user">生成人才画像报告</div>`;saveChat();
+  document.getElementById('dsChat').classList.add('active');
+  document.getElementById('dsChat').textContent='💬 追问顾问 — ⟳ 生成报告中...';
+  try{
+    const history=buildChatHistory();
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:'生成人才画像报告',context:{...currentData,history},action:'generate'})});
+    const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='',report='';
+    while(true){
+      const{value,done}=await reader.read();if(done)break;
+      buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
+      for(const line of lines){if(!line.startsWith('data: '))continue;
+        try{const d=JSON.parse(line.slice(6));
+          if(d.step==='progress'){document.getElementById('dsChat').textContent='💬 追问顾问 — ⟳ '+d.text;}
+          else if(d.step==='report'){report=d.answer;document.getElementById('dsChat').classList.remove('active');document.getElementById('dsChat').classList.add('done');document.getElementById('dsChat').textContent='💬 人才画像 — ✓ 已生成';}
+          else if(d.step==='error'){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">${d.text}</div>`;saveChat();return;}
+        }catch(e){}
+      }
+    }
+    if(report){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="max-width:95%">${report}</div>`;saveChat();}
+  }catch(e){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">报告生成失败</div>`;saveChat();}
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
 async function sendChat(){
   const input=document.getElementById('chatInput');const q=input.value.trim();if(!q||!currentData)return;input.value='';
   const msgs=document.getElementById('chatMessages');msgs.innerHTML+=`<div class="chat-msg chat-user">${q}</div>`;saveChat();
-  // Dashboard: activate chat branch
   document.getElementById('dsChat').classList.add('active');
   document.getElementById('dsChat').textContent='💬 追问顾问 — ⟳ 分析中...';
   try{
-    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:currentData,industry:document.getElementById('industry').value.trim(),role:document.getElementById('role').value.trim()})});
-    const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='',answer='',recs=[],sugs=[];
+    const history=buildChatHistory();
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:{...currentData,history}})});
+    const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='',message='',offerReport=false,understanding='',sugs=[];
     while(true){
       const{value,done}=await reader.read();if(done)break;
       buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
@@ -292,22 +330,28 @@ async function sendChat(){
         try{const d=JSON.parse(line.slice(6));
           if(d.step==='progress'){document.getElementById('dsChat').textContent='💬 追问顾问 — ⟳ '+d.text;}
           else if(d.step==='done'){
-            answer=d.answer||'';recs=d.recommendations||[];sugs=d.suggestions||[];
-            document.getElementById('dsChat').classList.remove('active');document.getElementById('dsChat').classList.add('done');
-            document.getElementById('dsChat').textContent='💬 追问顾问 — ✓ 已完成';
+            message=d.message||'';offerReport=d.offer_report||false;understanding=d.understanding||'';sugs=d.suggestions||[];
+            document.getElementById('dsChat').classList.remove('active');
+            document.getElementById('dsChat').classList.add('done');
+            document.getElementById('dsChat').textContent='💬 追问顾问 — ✓';
           }
-          else if(d.step==='error'){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">${d.text}</div>`;saveChat();return;}
+          else if(d.step==='error'){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">${d.text||'服务暂不可用'}</div>`;saveChat();return;}
         }catch(e){}
       }
     }
-    if(!answer){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">抱歉，追问服务无响应</div>`;saveChat();msgs.scrollTop=msgs.scrollHeight;return;}
-    // Render answer
-    let isHtml=/<[a-z][\s\S]*>/i.test(answer);
-    if(!isHtml){answer=answer.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/### (.+)/g,'<h4>$1</h4>').replace(/\n- /g,'\n· ');}
-    let extra='';
-    if(recs.length){extra='<div style="margin-top:8px;font-size:12px;color:#10b981">推荐候选人: '+recs.map(r=>`<span class="badge badge-green">${r.name}(${r.reason})</span>`).join(' ')+'</div>';}
-    msgs.innerHTML+=`<div class="chat-msg chat-bot${recs.length?' chat-recommend':''}"${isHtml?' style="max-width:95%"':''}>${answer}${extra}</div>`;saveChat();
-    if(sugs.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">继续追问:</span>'+sugs.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
+    if(!message){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">抱歉，追问服务无响应</div>`;saveChat();msgs.scrollTop=msgs.scrollHeight;return;}
+    // Show offer report button if agent thinks enough info collected
+    if(offerReport){
+      document.getElementById('reportOffer').style.display='';
+      document.getElementById('reportOfferHint').textContent=understanding||'信息已足够，可生成报告';
+    }else{
+      document.getElementById('reportOffer').style.display='none';
+    }
+    // Render message (already HTML from agent)
+    let isHtml=/<[a-z][\s\S]*>/i.test(message);
+    if(!isHtml){message=message.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');}
+    msgs.innerHTML+=`<div class="chat-msg chat-bot"${isHtml?' style="max-width:95%"':''}>${message}</div>`;saveChat();
+    if(sugs.length){document.getElementById('suggestedQuestions').innerHTML='<span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快捷回复:</span>'+sugs.map(s=>`<button class="btn btn-ghost btn-sm" onclick="askQuestion('${s}')">${s}</button>`).join('');}
   }catch(e){
     msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">抱歉，追问服务暂时不可用</div>`;saveChat();
     document.getElementById('dsChat').classList.remove('active');
@@ -320,7 +364,7 @@ async function loadHistory(){
   try{const resp=await fetch('/api/data?list=true');if(!resp.ok)throw new Error('API');const d=await resp.json();const p=d.positions||[];if(!p.length){el.innerHTML='<div class="empty">暂无历史报告</div>';return;}
   const fmtDate=(d)=>d?d.substring(0,10):'';el.innerHTML=p.map(x=>`<div class="history-item"><div><span style="font-weight:600">${x.name||'报告 #'+x.id}</span><span class="history-meta" style="margin-left:8px">${x.industry||''} · ${x.role_direction||''} · ${fmtDate(x.created_at)}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${x.id})">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
 }
-async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div>';showResults(data);document.getElementById('btnRegenReport').style.display='';loadChat();}
+async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>我手上有刚才搜索到的市场数据，先聊聊你的业务情况吧——<br><br><span style="color:#f59e0b">你在做什么方向？想招一个什么样的人？</span></div>';showResults(data);document.getElementById('btnRegenReport').style.display='';loadChat();}
 loadHistory();
 </script>
 </body>
