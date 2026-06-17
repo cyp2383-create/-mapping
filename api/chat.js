@@ -169,7 +169,8 @@ async function handlePersonaBuilding(question, talents, jds, companies) {
       return { answer, recommendations: [], suggestions: qs };
     }
   } catch(e) {
-    // Assessment failed, proceed with whatever info we have
+    console.error('Persona assessment failed:', e.message);
+    // Proceed with whatever info we have
   }
 
   // Phase 2: Cross-reference collected companies for business relevance
