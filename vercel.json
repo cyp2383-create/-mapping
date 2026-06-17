@@ -1,5 +1,6 @@
 {
   "functions": {
-    "api/generate.js": { "maxDuration": 120 }
+    "api/generate.js": { "maxDuration": 120 },
+    "api/regenerate.js": { "maxDuration": 60 }
   }
 }

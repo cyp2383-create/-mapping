@@ -1,4 +1,6 @@
 /** POST /api/generate — 两步人才地图: 宏观报告 + 追问后定向报告 */
+import { extractSkills, buildTrendAnalysisPrompt, buildTierProfilesPrompt, streamDeepSeek, parseJSONResponse, buildRedesignedReportHTML } from './report-builder.js';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin','*');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -252,68 +254,48 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
   });
 }
 
-// ========== Report Generators ==========
+// ========== Report Generators (parallel, shared module) ==========
 
 async function buildStreamingReport(ai, talents, jds, industry, role, send) {
-  // Extract current skills
-  const skills = {}; const kw=['agent','rag','llm','prompt','ai','ml','python','sql','产品','数据','模型','算法','架构','设计','运营','分析','开发','管理','系统','平台','大模型','gpt','transformer','微调','评测','a/b','增长','策略','安全','合规','风控','多模态','智能体','自动化'];
-  kw.forEach(k=>{let c=0;jds.forEach(j=>{if((j.snippet||'').toLowerCase().includes(k))c++;});if(c>0)skills[k]=c;});
-  const currentSkills=Object.entries(skills).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const currentSkills = extractSkills(jds);
 
-  // Trend analysis
-  send({step:'report_progress',progress:72,text:'分析技能变化趋势...'});
-  const trendAnalysis=await generateTrendAnalysisStream(ai, currentSkills, send);
+  // Both DeepSeek calls run in PARALLEL — independent data, no shared state
+  send({ step:'report_progress', progress:72, text:'并行分析技能趋势+能力画像...' });
 
-  // Tier profiles
-  send({step:'report_progress',progress:82,text:'生成三档能力画像...'});
-  const tierProfiles=await generateTierProfilesStream(ai, talents, jds, send);
+  const [trendAnalysis, tierProfiles] = await Promise.all([
+    (async () => {
+      try {
+        const prompt = buildTrendAnalysisPrompt(currentSkills, jds.map(j => j.snippet || ''), industry, role);
+        const raw = await streamDeepSeek(prompt, 4000, (chars) => {
+          send({ step:'report_progress', progress:74, text:`趋势分析...${chars}字` });
+        });
+        return parseJSONResponse(raw);
+      } catch (e) {
+        console.error('Trend analysis failed:', e.message);
+        return { emerging:[], rising:[], declining:[], current_top:[], trend_summary:'趋势分析生成失败，请重试' };
+      }
+    })(),
+    (async () => {
+      try {
+        const prompt = buildTierProfilesPrompt(talents, jds);
+        const raw = await streamDeepSeek(prompt, 5000, (chars) => {
+          send({ step:'report_progress', progress:78, text:`画像分析...${chars}字` });
+        });
+        return parseJSONResponse(raw);
+      } catch (e) {
+        console.error('Tier profiles failed:', e.message);
+        return { horizontal_labels:{}, high:{}, mid:{}, low:{} };
+      }
+    })()
+  ]);
 
-  // Build report
-  const highN=talents.filter(t=>t.tier==='high').length,midN=talents.filter(t=>t.tier==='mid').length,lowN=talents.filter(t=>t.tier==='low').length;
-  return buildTrendReportHTML(currentSkills,trendAnalysis,tierProfiles,talents,highN,midN,lowN);
-}
+  send({ step:'report_progress', progress:90, text:'渲染报告...' });
 
-async function generateTrendAnalysisStream(ai, skills, send) {
-  const text=skills.map(([k,v])=>`${k}:${v}`).join(',');
-  const p=`你是技术趋势分析师。当前技能:${text}。推断2年前主流技能,对比变化。JSON:{"emerging":[{"skill":"","reason":""}],"rising":[],"declining":[],"trend_summary":""}`;
-  const full=await streamDeepSeek(p,1500,ai,(chars)=>{send({step:'report_progress',progress:76,text:`趋势分析...${chars}字`});});
-  try{let t=full.trim();if(t.startsWith('```'))t=t.replace(/```json?|```/g,'');return JSON.parse(t);}
-  catch(e){return{emerging:[],rising:[],declining:[],trend_summary:'分析失败'};}
-}
+  const highN = talents.filter(t => t.tier === 'high').length;
+  const midN = talents.filter(t => t.tier === 'mid').length;
+  const lowN = talents.filter(t => t.tier === 'low').length;
 
-async function generateTierProfilesStream(ai, talents, jds, send) {
-  const high=talents.filter(t=>t.tier==='high').slice(0,5).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const mid=talents.filter(t=>t.tier==='mid').slice(0,5).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const low=talents.filter(t=>t.tier==='low').slice(0,5).map(t=>`${t.name}|${t.current_company}|${t.current_title}`).join('\n');
-  const p=`你是人才评估专家。不提学历和年限。JSON:{"high":{"capabilities":[],"project_scope":"","differentiator":""},"mid":{...},"low":{...}}。高端:${high}。中端:${mid}。低端:${low}`;
-  const full=await streamDeepSeek(p,1500,ai,(chars)=>{send({step:'report_progress',progress:86,text:`画像分析...${chars}字`});});
-  try{let t=full.trim();if(t.startsWith('```'))t=t.replace(/```json?|```/g,'');return JSON.parse(t);}
-  catch(e){return{high:{capabilities:[],project_scope:'',differentiator:''},mid:{capabilities:[],project_scope:'',differentiator:''},low:{capabilities:[],project_scope:'',differentiator:''}};}
-}
-
-async function streamDeepSeek(prompt, maxTokens, ai, onChunk) {
-  const resp=await fetch('https://api.deepseek.com/v1/chat/completions',{
-    method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:maxTokens,stream:true})});
-  const reader=resp.body.getReader();const decoder=new TextDecoder();let buf='',full='';
-  while(true){const{value,done}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});
-    const lines=buf.split('\n');buf=lines.pop()||'';
-    for(const line of lines){if(!line.startsWith('data:'))continue;const c=line.slice(6);if(c==='[DONE]')continue;
-      try{full+=JSON.parse(c).choices?.[0]?.delta?.content||'';}catch(e){}
-    }
-    onChunk(full.length);
-  }
-  return full;
-}
-
-function buildTrendReportHTML(skills,trend,tiers,talents,highN,midN,lowN) {
-  const tags=skills.map(([k,v])=>`<span class="skill-tag">${k}<small>${v}</small></span>`).join('');
-  const trendCards=(arr,label,color)=>!arr||!arr.length?'':arr.map(s=>`<div class="trend-item"><span class="trend-dot" style="background:${color}"></span><strong>${s.skill}</strong><span class="trend-reason">${s.reason}</span></div>`).join('');
-  const tierCard=(tier,data,color,count)=>{
-    if(!data||!data.capabilities)return'';
-    return`<div class="tier-card" style="border-left:3px solid ${color}"><h3 style="color:${color}">${tier==='high'?'高端人才':tier==='mid'?'中端人才':'入门人才'}<small style="color:#a8a8a8;font-size:13px"> (${count}人)</small></h3><div class="tier-capabilities">${(data.capabilities||[]).map(c=>`<span class="cap-tag">${c}</span>`).join('')}</div><div class="tier-scope"><strong>项目级别:</strong> ${data.project_scope||''}</div><div class="tier-diff"><strong>核心差异:</strong> ${data.differentiator||''}</div></div>`;};
-  return`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.08) 0%,transparent 50%),linear-gradient(180deg,#151525 0%,#121220 30%,#10101c 60%,#121220 100%);background-attachment:fixed;color:#f5f5f5;line-height:1.6;padding:32px 24px;max-width:1100px;margin:0 auto}h1{font-size:28px;font-weight:800;text-align:center;margin-bottom:8px;background:linear-gradient(135deg,#f5f5f5,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent}.subtitle{text-align:center;color:#a8a8a8;font-size:14px;margin-bottom:28px}h2{font-size:18px;font-weight:600;margin:28px 0 16px;border-left:3px solid #f59e0b;padding-left:12px}.skills-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:24px}.skills-card h3{font-size:12px;font-weight:600;color:#a8a8a8;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}.skill-tag{display:inline-block;background:rgba(245,158,11,.15);color:#fcd34d;padding:4px 10px;border-radius:20px;font-size:12px;margin:3px;border:1px solid rgba(245,158,11,.2)}.skill-tag small{color:#a8a8a8;margin-left:4px}.trend-section{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:16px}.trend-section h3{font-size:16px;font-weight:600;margin-bottom:12px}.trend-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:14px}.trend-item:last-child{border-bottom:none}.trend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}.trend-reason{color:#a8a8a8;font-size:12px;margin-left:4px}.trend-summary{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.15);border-radius:12px;padding:16px;margin-top:16px;font-size:14px;color:#fcd34d;line-height:1.8}.tier-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:14px}.tier-card h3{font-size:18px;margin-bottom:12px}.tier-capabilities{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}.cap-tag{background:rgba(99,102,241,.12);color:#a5b4fc;padding:4px 12px;border-radius:20px;font-size:12px}.tier-scope,.tier-diff{font-size:14px;color:#a8a8a8;margin-top:8px;line-height:1.8}.tier-diff strong{color:#f59e0b}@media(max-width:700px){body{padding:16px}}</style></head><body><h1>人才画像报告</h1><div class="subtitle">基于${talents.length}位候选人数据</div><h2>技能趋势变化</h2><div class="skills-card"><h3>当前热门技能</h3><div>${tags||'暂无数据'}</div></div>${trend.emerging?.length?`<div class="trend-section"><h3 style="color:#10b981">新增技能</h3>${trendCards(trend.emerging,'emerging','#10b981')}</div>`:''}${trend.rising?.length?`<div class="trend-section"><h3 style="color:#6366f1">上升技能</h3>${trendCards(trend.rising,'rising','#6366f1')}</div>`:''}${trend.declining?.length?`<div class="trend-section"><h3 style="color:#ef4444">衰退技能</h3>${trendCards(trend.declining,'declining','#ef4444')}</div>`:''}${trend.trend_summary?`<div class="trend-summary">${trend.trend_summary}</div>`:''}<h2>三档人才能力画像</h2>${tierCard('high',tiers.high,'#10b981',highN)}${tierCard('mid',tiers.mid,'#f59e0b',midN)}${tierCard('low',tiers.low,'#6366f1',lowN)}<div style="text-align:center;padding:24px;color:#666;font-size:12px">Tavily · LinkedIn · DeepSeek | 趋势分析为AI推理</div></body></html>`;
+  return buildRedesignedReportHTML(currentSkills, trendAnalysis, tierProfiles, talents, highN, midN, lowN, industry, role, jds.length);
 }
 
 
