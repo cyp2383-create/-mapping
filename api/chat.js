@@ -49,44 +49,44 @@ async function handleConversation(question, talents, jds, companies, history, se
     `${h.role==='user'?'客户':'我'}: ${h.content}`
   ).join('\n');
 
-  const prompt = `你是资深猎头顾问，正在和客户进行招聘需求沟通。你不是客服，不是问卷系统——你是专业的猎头顾问，用对话了解客户需求。
+  const conversationRounds = history.filter(h => h.role === 'user').length;
 
-## 你的专业准则
-- 像猎头一样对话，不列清单、不打分、不展示雷达图
-- 每一轮只追问当前最关键缺失的1-2个信息，基于上一轮客户的回答动态推理下一步问什么
-- 先 acknowledge 客户说的话（表示你理解了），再自然追问
-- 如果客户描述模糊，帮助他理清思路：给1-2个具体场景让他选（如"你们是做招聘模块的AI还是全人力六大模块？"）
-- 用已有的市场数据做参照（如"我看到 XX 公司在做类似的事，他们招人时看重 YY 能力，这和你的预期一致吗？"）
+  const prompt = `你是资深猎头顾问，正在和客户进行招聘需求沟通。这是第${conversationRounds + 1}轮对话。
 
-## 已收集的市场数据（供你参考，不要全部列出来）
-候选人分布在: ${companyList}
-部分JD: ${jdExcerpts}
-候选人样本: ${talentSummary}
+## 核心规则（必须遵守）
+1. **每轮必须引用至少1条市场数据**：从JD或候选人中找一个具体洞察（如"我看到XX公司的JD要求YY能力"、"目前数据中有N位来自XX的候选人"），用数据增加专业感，不要只说空话。
+2. **禁止重复追问**：对话历史中已经问过的问题绝对不能再问。如果卡住了，给2-3个具体选项让客户选，而不是继续追问开放问题。
+3. **及时收束**：第1-2轮可以追问细节。第3轮起，在回复开头给出阶段性判断（"根据目前的沟通，我初步判断你需要..."）。第4轮及以后，必须设置 offer_report=true 并引导客户生成画像。
+4. **不要列清单**：像猎头一样对话，不打分、不列维度表。
+
+## 市场数据（必须引用）
+候选人在这些公司: ${companyList}
+JD片段: ${jdExcerpts}
 
 ## 对话历史
-${historyText || '(这是第一轮对话)'}
+${historyText || '(第一轮)'}
 
-## 客户最新消息
+## 客户消息
 ${question}
 
-## 你的任务
-1. 判断：目前对客户需求的理解程度（业务目标、岗位定位、关键要求）
-2. 如果信息还不够 → acknowledge 已了解的部分 + 追问最关键缺失
-3. 如果信息已经比较充分 → 总结你的理解 + 设置 offer_report=true
+## 回复结构
+1. 先acknowledge + 引用一条数据洞察
+2. 如果需要更多信息：追问1个最关键问题（给2-3个选项让客户选，不要开放题）
+3. 如果信息够了：简要总结理解 + offer_report=true
+4. 如果这是第4轮或更后：offer_report=true
 
-## 返回JSON
+## JSON返回
 {
-  "message": "你的回复(用HTML, 深色主题, 自然对话风格, 150字内, 不要太长)",
+  "message": "HTML格式回复(深色主题, 自然对话, 150字内)",
   "offer_report": true/false,
-  "understanding": "对客户需求的一句话总结(仅offer_report=true时需要)",
-  "suggestions": ["快捷追问1", "快捷追问2"]
+  "understanding": "一句话总结(offer_report=true时必填)",
+  "suggestions": ["快捷选项1", "快捷选项2"]
 }
 
 ## message格式
-- 用自然对话语气，像猎头和客户聊天
-- 适当引用市场数据（"我看到XX公司在做..."）增加专业感
-- HTML用p标签，深色主题内联样式: color:#e0e0e0; 强调用 color:#f59e0b
-- 不要用h3/h4标题，保持聊天消息的轻量感`;
+- 数据引用用 <span style="color:#f59e0b">...</span> 高亮
+- 追问选项用序号列出，简洁明了
+- 不用h3/h4，保持聊天轻量感`;
 
   const raw = await streamDeepSeek(prompt, 800, (chars) => {
     send({step:'progress',text:`正在组织回复...${chars}字`});

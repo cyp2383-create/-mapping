@@ -42,9 +42,9 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 /* ===== Dashboard ===== */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .dash-row{display:flex;align-items:center;gap:0;padding:20px 24px;justify-content:center}
-.dash-box{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 20px;min-width:110px;text-align:center;transition:all .3s}
+.dash-box{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 16px;flex:1;text-align:center;transition:all .3s}
 .dash-box:hover{border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.04)}
-.dash-box-wide{flex:1;max-width:340px;min-width:200px}
+.dash-box-wide{flex:2}
 .db-num{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-muted);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .3s}
 .db-title{font-size:13px;font-weight:600;color:var(--text)}
 .db-sub{font-size:11px;color:var(--text-muted);line-height:1.4}
@@ -131,7 +131,7 @@ tr:hover td{background:var(--surface-hover)}
     <div class="input-group" style="max-width:120px"><label>城市(可选)</label><input id="city" placeholder="北京"></div>
     <button class="btn btn-primary" id="btnGen" onclick="startGenerate()">生成人才地图</button>
   </div>
-  <div class="progress" id="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div><div class="progress-text" id="progressText">准备中...</div></div>
+
 </div>
 
 <!-- ② Agent 运行看板 -->
@@ -154,6 +154,7 @@ tr:hover td{background:var(--surface-hover)}
       </div>
     </div>
   </div>
+  <div class="progress" id="progress" style="margin:0 24px 16px"><div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div></div>
 </div>
 
 <!-- ③ 猎头顾问 -->
@@ -191,7 +192,7 @@ async function startGenerate(){
   const b=document.getElementById('btnGen');b.disabled=true;
   const p=document.getElementById('progress');p.classList.add('active');
   document.getElementById('dsReportState').textContent='生成中...';
-  updateProgress(5,'连接中...');
+  updateProgress(5);
   updateWorkflow(1); // Step 1 done (user already filled input)
   try{
     const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({industry,role,city:document.getElementById('city').value.trim()})});
@@ -201,13 +202,13 @@ async function startGenerate(){
       buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='companies'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
-          else if(d.step==='jds'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
-          else if(d.step==='talents'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
-          else if(d.step==='enrich'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
-          else if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>我手上有刚才搜索到的市场数据，先聊聊你的业务情况吧——<br><br><span style="color:#f59e0b">你在做什么方向？想招一个什么样的人？</span></div>';showResults(d);}
-          else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('dsReportState').textContent='⟳ '+d.text;}
-          else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='已完成 ✓';document.getElementById('dsReportAct').innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button>`;}
+          if(d.step==='companies'){updateProgress(d.progress);updateWorkflow(2,d.text);}
+          else if(d.step==='jds'){updateProgress(d.progress);updateWorkflow(2,d.text);}
+          else if(d.step==='talents'){updateProgress(d.progress);updateWorkflow(2,d.text);}
+          else if(d.step==='enrich'){updateProgress(d.progress);updateWorkflow(2,d.text);}
+          else if(d.step==='data_ready'){updateProgress(65);currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>我手上有刚才搜索到的市场数据，先聊聊你的业务情况吧——<br><br><span style="color:#f59e0b">你在做什么方向？想招一个什么样的人？</span></div>';showResults(d);}
+          else if(d.step==='report_progress'){updateProgress(d.progress);document.getElementById('dsReportState').textContent='⟳ '+d.text;}
+          else if(d.step==='report_ready'){updateProgress(100);if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='已完成 ✓';document.getElementById('dsReportAct').innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button>`;}
           else if(d.step==='error'){alert(d.text);}
           else{updateProgress(d.progress||50,d.text||'处理中...');}
         }catch(e){}
@@ -217,7 +218,7 @@ async function startGenerate(){
   setTimeout(()=>{p.classList.remove('active');b.disabled=false},500);
 }
 function scrollToMod(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
-function updateProgress(pct,text){document.getElementById('progressFill').style.width=pct+'%';document.getElementById('progressText').textContent=text;}
+function updateProgress(pct){document.getElementById('progressFill').style.width=pct+'%';}
 function updateWorkflow(step,sub){
   // Step 1
   if(step>=1){document.getElementById('ds1').classList.add('done');document.getElementById('ds1Sub').textContent='已配置 ✓';}
