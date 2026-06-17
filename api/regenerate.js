@@ -22,14 +22,13 @@ export default async function handler(req, res) {
     const talents=JSON.parse(v(0)||'[]'), jds=JSON.parse(v(1)||'[]');
     const talentData=Array.isArray(talents)?talents:(talents.data||[]);
 
-    // Skill comparison: current vs 2 years ago
-    send({step:'progress',text:'分析技能变化趋势...',elapsed:0});
+    // Skill comparison + Tier profiles — run in parallel (independent)
+    send({step:'progress',text:'分析技能趋势+能力画像...',elapsed:0});
     const currentSkills=extractSkills(jds);
-    const trendAnalysis=await generateTrendAnalysis(currentSkills, talentData, jds, send);
-
-    // Tier-based capability profiles
-    send({step:'progress',text:'生成三档能力画像...',elapsed:5});
-    const tierProfiles=await generateTierProfiles(talentData, jds, send);
+    const [trendAnalysis, tierProfiles]=await Promise.all([
+      generateTrendAnalysis(currentSkills, talentData, jds, send),
+      generateTierProfiles(talentData, jds, send)
+    ]);
 
     // Build report
     const report=buildTrendReport(currentSkills, trendAnalysis, tierProfiles, talentData);
@@ -63,7 +62,7 @@ async function generateTrendAnalysis(currentSkills, talents, jds, send) {
 
   const resp=await fetch('https://api.deepseek.com/v1/chat/completions',{
     method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:600,stream:true})
+    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:1500,stream:true})
   });
   const reader=resp.body.getReader();const decoder=new TextDecoder();
   let buf='',full='',start=Date.now();
@@ -103,7 +102,7 @@ JD参考: ${jdText}
 
   const resp=await fetch('https://api.deepseek.com/v1/chat/completions',{
     method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
-    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:600,stream:true})
+    body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.3,max_tokens:1500,stream:true})
   });
   const reader=resp.body.getReader();const decoder=new TextDecoder();
   let buf='',full='',start=Date.now();
