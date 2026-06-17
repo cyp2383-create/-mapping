@@ -68,12 +68,20 @@ export default async function handler(req, res) {
     const lowN = talentData.filter(t => t.tier === 'low').length;
     const report = buildRedesignedReportHTML(currentSkills, trendAnalysis, tierProfiles, talentData, highN, midN, lowN, industry, role, jds.length);
 
-    // Save to Turso (fire-and-forget)
+    // Save to Turso (await to guarantee persistence before ending response)
     const rjson = JSON.stringify(report);
-    fetch(process.env.TURSO_URL+'/v2/pipeline', {
-      method:'POST',headers:{'Authorization':'Bearer '+process.env.TURSO_TOKEN,'Content-Type':'application/json'},
-      body:JSON.stringify({requests:[{type:'execute',stmt:{sql:"UPDATE positions SET report_html='"+rjson.replace(/'/g,"''")+"' WHERE id="+Number(position_id)}}]})
-    }).catch(e=>{});
+    try {
+      const saveResp = await fetch(process.env.TURSO_URL+'/v2/pipeline', {
+        method:'POST',headers:{'Authorization':'Bearer '+process.env.TURSO_TOKEN,'Content-Type':'application/json'},
+        body:JSON.stringify({requests:[{type:'execute',stmt:{sql:"UPDATE positions SET report_html='"+rjson.replace(/'/g,"''")+"' WHERE id="+Number(position_id)}}]})
+      });
+      const saveData = await saveResp.json();
+      const saveErr = saveData.results?.[0]?.error;
+      if (saveErr) console.error('Regen save error:', saveErr);
+      else console.log('Regen saved to position', position_id, 'chars:', report.length);
+    } catch(e) {
+      console.error('Regen save failed:', e.message);
+    }
     send({step:'done',report_html:report,chars:report.length});
     res.end();
   } catch(e) { send({error:e.message}); res.end(); }

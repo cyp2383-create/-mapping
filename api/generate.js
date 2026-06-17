@@ -158,16 +158,21 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     stage:1
   });
 
-  storeResults(industry, role, talentRows, jdRows).catch(e => {});
+  // Await storage to guarantee the row exists before report UPDATE
+  try {
+    await storeResults(industry, role, talentRows, jdRows);
+  } catch(e) { console.error('storeResults failed:', e.message); }
 
-  // PHASE 2: Generate template-based report (same as regenerate)
+  // PHASE 2: Generate report
   send({step:'report',text:'生成报告...',progress:70});
   try {
     const reportHtml = await buildStreamingReport(ai, talentRows, jdRows, industry, role, send);
-    // Update the position with report_html (JSON encoded)
+    // Save report_html to Turso (await to guarantee persistence)
     const rjson = JSON.stringify(reportHtml);
     const db = turso();
-    db.execute("UPDATE positions SET report_html='"+rjson.replace(/'/g,'')+"' WHERE id=(SELECT MAX(id) FROM positions)").catch(e=>{});
+    try {
+      const upd = await db.execute("UPDATE positions SET report_html=? WHERE id=(SELECT MAX(id) FROM positions)", [rjson]);
+    } catch(e) { console.error('Report save failed:', e.message); }
     send({step:'report_ready',progress:100, report_html: reportHtml});
   } catch(e) {
     send({step:'report_ready',progress:100,
@@ -387,8 +392,12 @@ async function storeResults(industry, role, talentRows, jdRows) {
   const tjson = JSON.stringify({_industry:industry, _role:role, _name:role+'-'+industry, data:talentRows.slice(0,40)});
   const jjson = JSON.stringify(jdRows.slice(0,30));
   const rjson = JSON.stringify('');
+  // Use ASCII-safe name for the direct column, full Chinese is in talent_data JSON
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
-  await db.execute("INSERT INTO positions (name, industry, role_direction, talent_data, jd_data, report_html) VALUES ('"+pname+"','"+
-    industry.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+role.replace(/[^\x00-\x7F]/g,'').substring(0,30)+"','"+
-    tjson.replace(/'/g,'')+"','"+jjson.replace(/'/g,'')+"','"+rjson.replace(/'/g,'')+"')");
+  const indSafe = industry.replace(/[^\x00-\x7F]/g,'').substring(0,30);
+  const roleSafe = role.replace(/[^\x00-\x7F]/g,'').substring(0,30);
+  await db.execute(
+    "INSERT INTO positions (name, industry, role_direction, talent_data, jd_data, report_html) VALUES (?,?,?,?,?,?)",
+    [pname, indSafe, roleSafe, tjson, jjson, rjson]
+  );
 }
