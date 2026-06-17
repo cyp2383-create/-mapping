@@ -93,63 +93,73 @@ function detectIntent(q) {
 // ========== Mode 1: 业务场景 → 人才画像 ==========
 
 async function handlePersonaBuilding(question, talents, jds, companies) {
-  // Build rich data context from what we already collected
   const talentSummary = buildTalentSummary(talents);
   const jdSummary = buildJdSummary(jds);
   const companyTalentMap = buildCompanyTalentMap(talents);
   const skillExtract = extractKeySkills(jds);
 
-  const prompt = `你是资深猎头顾问，为客户构建精准的人才画像。
+  // Phase 1: Business understanding check
+  // If the business description is vague, ask clarifying questions first
+  const clarityPrompt = `你是资深猎头顾问。用户在描述他的业务需求。判断以下描述是否足够清晰（包含：业务是什么、需要什么类型的人才、人才级别/定位）。
 
-## 你的角色
-你不是通用问答助手。你需要像资深猎头一样：分析客户的业务场景 → 从市场数据中找对标 → 构建可执行的人才画像和挖猎策略。
+用户描述: "${question}"
 
-## 客户的业务场景
+如果描述足够清晰（包含上述3个要素中的至少2个），返回: {"clear":true}
+如果描述模糊（少于2个要素），返回: {"clear":false,"missing":["缺失的要素1","缺失的要素2"],"questions":["具体追问1","具体追问2"]}
+
+只返回JSON。`;
+
+  try {
+    const clarityRaw = await callDeepSeek(clarityPrompt, 200, 0.1);
+    const clarity = JSON.parse(clarityRaw.trim().replace(/```json?|```/g, ''));
+
+    if (!clarity.clear) {
+      const qs = (clarity.questions||['能否详细描述一下你的业务方向和具体需求？','你希望找到什么样的人才？']).slice(0,3);
+      const missing = (clarity.missing||[]).join('、');
+      const answer = `<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:12px;padding:16px;margin-bottom:12px">
+<p style="color:#fcd34d;font-size:14px;margin:0 0 8px"><strong>🤔 想更准确帮你，我需要了解以下信息：</strong></p>
+<p style="color:#a8a8a8;font-size:13px;margin:0 0 12px">目前你提到业务中关于 <span style="color:#f59e0b">${missing}</span> 的信息还不够具体，这会影响人才画像的精准度。</p>
+<div style="display:flex;flex-direction:column;gap:6px">${qs.map((q,i) => `<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 14px;font-size:13px;color:#e0e0e0"><span style="color:#f59e0b;font-weight:600">${i+1}.</span> ${q}</div>`).join('')}</div>
+</div>
+<p style="color:#a8a8a8;font-size:12px">💡 你可以直接在下面回复，描述越具体，人才画像越精准。</p>`;
+      return { answer, recommendations: [], suggestions: qs };
+    }
+  } catch(e) {
+    // If clarity check fails, proceed with full analysis
+  }
+
+  // Phase 2: Business is clear — full persona building
+  const prompt = `你是资深猎头顾问。分析客户业务场景 → 市场对标 → 构建人才画像。
+
+## 客户业务场景
 ${question}
 
-## 已收集的市场数据
-
-### 候选人分布（${talents.length}人）
-${talentSummary}
-
-### 招聘JD关键信息（${jds.length}条）
-${jdSummary}
-
-### 各公司人才特征
-${companyTalentMap}
-
-### 市场技能热度
-${skillExtract}
+## 市场数据
+候选人(${talents.length}人): ${talentSummary}
+JD(${jds.length}条): ${jdSummary}
+公司人才特征: ${companyTalentMap}
+技能热度: ${skillExtract}
 
 ## 任务
 
-请按以下结构输出（用中文，语言专业像猎头顾问）：
-
 ### 1. 业务对标分析
-- 从数据中找出哪些公司在做与客户业务相关的事
-- 每家公司写1-2句：他们在做什么、为什么他们的员工可能是目标人选
-- 只引用数据中出现的公司和岗位，不编造
+从数据中找出与客户业务相关的公司。每家公司：他们在做什么 → 为什么员工可能是目标人选。只引用数据中的公司和岗位。
 
-### 2. 目标公司能力提炼
-- 这些公司的JD在招人时看重什么能力？
-- 总结3-5个核心能力维度（技术+业务+软技能）
-- 引用具体的JD数据点
+### 2. 能力要求提炼
+这些公司JD看重什么能力？总结3-5个核心维度(技术+业务+软技能)。引用JD数据点。
 
 ### 3. 理想候选人画像
-- 一句话定位这个候选人
-- 能力清单（硬技能+软技能）
-- 理想的背景特征（从哪些公司、什么级别、主导过什么项目）
+一句话定位 + 硬技能清单 + 软技能 + 理想背景(从哪些公司、什么级别、主导过什么项目)。
 
-### 4. 挖猎策略建议
-- 推荐2-3家重点挖猎的公司及优先级
-- 从每家挖人的优势是什么
-- 面试评估的要点（重点考察什么）
+### 4. 挖猎策略
+推荐2-3家优先挖猎公司 + 优势 + 面试评估要点。
 
 ## 规则
-- 只基于已有数据推理，数据不足处标注「建议后续定向搜索」
-- 不编造公司、候选人、具体数字
-- 如果用户描述的场景在现有数据中找不到直接对标，诚实说明并给出搜索方向建议
-- 输出用HTML格式(body内容)，专业简洁的卡片式布局，白色背景`;
+- 只基于数据推理，数据不足处标注「建议后续定向搜索」
+- 不编造公司、候选人、数字
+- 输出HTML body内容，深色主题风格(背景#151525,文字#f5f5f5,金色#f59e0b强调,卡片rgba(255,255,255,.03)毛玻璃)
+- 用h3做段落标题(金色),p做正文,ul/li做列表
+- 卡片: background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px`;
 
   const answer = await callDeepSeek(prompt, 2000, 0.3);
   return formatAnswer(answer, []);
@@ -181,7 +191,7 @@ JD市场情报: ${jdSummary}
 ## 规则
 - 只基于数据推理，不编造
 - 专业猎头口吻
-- HTML格式(body)，白色背景，卡片式布局`;
+- HTML格式(body)，深色主题(#151525背景,#f5f5f5文字,#f59e0b强调)，卡片式布局`;
 
   const answer = await callDeepSeek(prompt, 1500, 0.3);
 
@@ -214,7 +224,7 @@ JD情报: ${jdSummary}
 ## 规则
 - 只基于已有数据推理，不编造不存在的业务线
 - 不提及具体人数、金额等精确数字
-- HTML格式(body内容)，白色背景
+- HTML格式(body内容)，深色主题(#151525背景,#f5f5f5文字,#f59e0b强调)
 - 最后引导客户描述业务场景，以便进一步给出定向建议`;
 
   const answer = await callDeepSeek(prompt, 1500, 0.3);
@@ -251,7 +261,7 @@ ${talentSummary}
 ## 规则
 - 只基于数据推理
 - 不编造具体能力或标准
-- HTML格式(body)，白色背景，卡片式布局`;
+- HTML格式(body)，深色主题(#151525背景,#f5f5f5文字,#f59e0b强调)，卡片式布局`;
 
   const answer = await callDeepSeek(prompt, 1500, 0.3);
   return formatAnswer(answer, []);
