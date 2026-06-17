@@ -40,34 +40,31 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease}
 .progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px}
 /* ===== Dashboard ===== */
-.dash-card{border-color:rgba(245,158,11,.15);box-shadow:0 0 24px rgba(245,158,11,.04)}
-.dash-card .card-hd{border-bottom:none;padding-bottom:8px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.dash-body{display:flex;align-items:stretch;padding:4px 24px 20px;gap:0}
-.dash-step{display:flex;gap:10px;flex:1;min-width:0}
-.dash-step-end{flex:2}
-.ds-indicator{display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;width:26px}
-.ds-num{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.06);color:var(--text-muted);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .3s}
-.ds-line{flex:1;width:2px;min-height:16px;background:rgba(255,255,255,.04);margin:4px 0;border-radius:1px}
-.ds-content{display:flex;flex-direction:column;gap:4px;padding-top:2px;flex:1;min-width:0}
-.ds-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.3}
-.ds-sub{font-size:11px;color:var(--text-muted);line-height:1.5;word-break:break-word}
-.ds-branch-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:2px}
-.ds-b-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px 14px;transition:all .3s}
-.ds-b-card.active{border-color:rgba(245,158,11,.2);background:rgba(245,158,11,.04)}
-.ds-b-card.done{border-color:rgba(16,185,129,.15);background:rgba(16,185,129,.04)}
-.ds-b-head{font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px}
-.ds-b-state{font-size:11px;color:var(--text-muted)}
-.ds-b-act{margin-top:6px}
-.ds-b-act .btn-sm{font-size:10px;padding:3px 8px}
+.dash-row{display:flex;align-items:center;gap:0;padding:20px 24px;justify-content:center}
+.dash-box{display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 20px;min-width:110px;text-align:center;transition:all .3s}
+.dash-box:hover{border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.04)}
+.dash-box-wide{flex:1;max-width:340px;min-width:200px}
+.db-num{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-muted);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .3s}
+.db-title{font-size:13px;font-weight:600;color:var(--text)}
+.db-sub{font-size:11px;color:var(--text-muted);line-height:1.4}
+.db-connector{font-size:16px;color:rgba(255,255,255,.1);margin:0 6px;flex-shrink:0}
+.db-branches{display:flex;gap:8px;margin-top:6px;width:100%}
+.db-b-card{flex:1;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:8px 10px;text-align:left;transition:all .3s}
+.db-b-card.active{border-color:rgba(245,158,11,.2);background:rgba(245,158,11,.04)}
+.db-b-card.done{border-color:rgba(16,185,129,.15);background:rgba(16,185,129,.04)}
+.db-b-head{font-size:11px;font-weight:600;color:var(--text)}
+.db-b-state{font-size:10px;color:var(--text-muted);margin-top:1px}
+.db-b-act{margin-top:4px}
+.db-b-act .btn-sm{font-size:10px;padding:2px 7px}
 
-/* Step states */
-.dash-step.done .ds-num{background:#10b981;color:#fff}
-.dash-step.done .ds-line{background:rgba(16,185,129,.2)}
-.dash-step.done .ds-title{color:#10b981}
-.dash-step.active .ds-num{background:var(--accent);color:#0a0a0a;animation:pulse 1.2s ease-in-out infinite}
-.dash-step.active .ds-sub{color:var(--text-secondary)}
-.dash-step.active .ds-line{background:rgba(245,158,11,.2)}
+/* Dash box states */
+.dash-box.done{border-color:rgba(16,185,129,.15);background:rgba(16,185,129,.03)}
+.dash-box.done .db-num{background:#10b981;color:#fff}
+.dash-box.done .db-title{color:#10b981}
+.dash-box.active{border-color:rgba(245,158,11,.2);background:rgba(245,158,11,.04)}
+.dash-box.active .db-num{background:var(--accent);color:#0a0a0a;animation:pulse 1.2s ease-in-out infinite}
+.dash-box.active .db-sub{color:var(--text-secondary)}
 
 /* Tab badges */
 .tab .tcnt{font-size:11px;background:rgba(245,158,11,.15);color:#fcd34d;padding:1px 7px;border-radius:20px;margin-left:4px;font-weight:600}
@@ -109,7 +106,7 @@ tr:hover td{background:var(--surface-hover)}
 .history-meta{font-size:12px;color:var(--text-secondary)}
 .empty{text-align:center;padding:48px;color:var(--text-muted);font-size:14px}
 .footer{text-align:center;padding:40px;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border)}
-@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}.dash-body{flex-direction:column;gap:12px}.ds-line{min-height:12px}}
+@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}.dash-row{flex-direction:column;gap:10px}.db-connector{transform:rotate(90deg)}.dash-box-wide{max-width:none}}
 </style>
 </head>
 <body>
@@ -126,7 +123,7 @@ tr:hover td{background:var(--surface-hover)}
 <div class="container">
 
 <!-- ① 需求配置 -->
-<div class="card">
+<div class="card" id="modConfig">
   <div class="card-hd"><span class="card-hd-num">1</span>需求配置</div>
   <div class="input-row" style="padding:0 24px 24px">
     <div class="input-group"><label>行业</label><input id="industry" placeholder="互联网行业" value="互联网行业"></div>
@@ -138,18 +135,24 @@ tr:hover td{background:var(--surface-hover)}
 </div>
 
 <!-- ② Agent 运行看板 -->
-<div class="card dash-card" id="dashCard">
+<div class="card" id="modDash">
   <div class="card-hd"><span class="card-hd-num">2</span>Agent 运行看板</div>
-  <div class="dash-body">
-    <div class="dash-step" id="ds1"><div class="ds-indicator"><span class="ds-num">1</span><div class="ds-line"></div></div><div class="ds-content"><span class="ds-title">① 需求配置</span><span class="ds-sub" id="ds1Sub">等待输入</span></div></div>
-    <div class="dash-step" id="ds2"><div class="ds-indicator"><span class="ds-num">2</span><div class="ds-line"></div></div><div class="ds-content"><span class="ds-title">② Agent搜索</span><span class="ds-sub" id="ds2Sub">等待数据</span></div></div>
-    <div class="dash-step dash-step-end" id="ds3"><div class="ds-indicator"><span class="ds-num">3</span></div><div class="ds-content">
-      <span class="ds-title">③ AI分析</span>
-      <div class="ds-branch-row">
-        <div class="ds-b-card" id="dsBChat"><div class="ds-b-head">💬 猎头顾问</div><div class="ds-b-state" id="dsChatState">等待对话</div><div class="ds-b-act" id="dsChatAct"></div></div>
-        <div class="ds-b-card" id="dsBReport"><div class="ds-b-head">📊 人才报告</div><div class="ds-b-state" id="dsReportState">等待生成</div><div class="ds-b-act" id="dsReportAct"></div></div>
+  <div class="dash-row">
+    <div class="dash-box" id="ds1" onclick="scrollToMod('modConfig')" style="cursor:pointer">
+      <span class="db-num">1</span><span class="db-title">需求配置</span><span class="db-sub" id="ds1Sub">等待输入</span>
+    </div>
+    <span class="db-connector">→</span>
+    <div class="dash-box" id="ds2" onclick="scrollToMod('modDash')">
+      <span class="db-num">2</span><span class="db-title">Agent搜索</span><span class="db-sub" id="ds2Sub">等待数据</span>
+    </div>
+    <span class="db-connector">→</span>
+    <div class="dash-box dash-box-wide" id="ds3">
+      <span class="db-num">3</span><span class="db-title">AI分析</span>
+      <div class="db-branches">
+        <div class="db-b-card" id="dsBChat"><span class="db-b-head">💬 猎头顾问</span><span class="db-b-state" id="dsChatState">等待对话</span><span class="db-b-act" id="dsChatAct"></span></div>
+        <div class="db-b-card" id="dsBReport"><span class="db-b-head">📊 人才报告</span><span class="db-b-state" id="dsReportState">等待生成</span><span class="db-b-act" id="dsReportAct"></span></div>
       </div>
-    </div></div>
+    </div>
   </div>
 </div>
 
@@ -213,6 +216,7 @@ async function startGenerate(){
   }catch(e){alert('生成失败');}
   setTimeout(()=>{p.classList.remove('active');b.disabled=false},500);
 }
+function scrollToMod(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
 function updateProgress(pct,text){document.getElementById('progressFill').style.width=pct+'%';document.getElementById('progressText').textContent=text;}
 function updateWorkflow(step,sub){
   // Step 1
