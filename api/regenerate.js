@@ -171,7 +171,7 @@ h2{font-size:18px;font-weight:600;margin:28px 0 16px;border-left:3px solid #f59e
 @media(max-width:700px){body{padding:16px}}
 </style></head><body>
 <h1>人才画像报告</h1>
-<div class="subtitle">基于${talents.length}位候选人 · ${jds.length}条JD数据</div>
+<div class="subtitle">基于${talents.length}位候选人</div>
 
 <h2>技能趋势变化</h2>
 <div class="skills-card"><h3>当前热门技能</h3><div>${skillTags||'暂无数据'}</div></div>
