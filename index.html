@@ -288,7 +288,7 @@ async function regenerateReport(){
 function askQuestion(q){document.getElementById('chatInput').value=q;switchTab('chat');sendChat()}
 function getChatKey(){return 'chat_'+((currentData&&currentData._posId)||'default');}
 function saveChat(){try{localStorage.setItem(getChatKey(),document.getElementById('chatMessages').innerHTML);}catch(e){}}
-function loadChat(){const k=getChatKey();const saved=localStorage.getItem(k);if(saved){document.getElementById('chatMessages').innerHTML=saved;document.getElementById('chatMessages').scrollTop=document.getElementById('chatMessages').scrollHeight;}}
+function loadChat(){let k=getChatKey();let saved=localStorage.getItem(k);if(!saved){saved=localStorage.getItem('chat_default');if(saved)localStorage.setItem(k,saved);}if(saved){document.getElementById('chatMessages').innerHTML=saved;document.getElementById('chatMessages').scrollTop=document.getElementById('chatMessages').scrollHeight;}}
 
 function buildChatHistory(){
   const msgs=document.getElementById('chatMessages');
