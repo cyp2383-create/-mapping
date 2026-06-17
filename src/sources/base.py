@@ -30,8 +30,13 @@ def _get_llm():
     if _llm_client is None:
         try:
             from openai import OpenAI
+            import os
+            api_key = os.getenv("DEEPSEEK_KEY", "")
+            if not api_key:
+                print("[LLM] DEEPSEEK_KEY not set in environment")
+                return None
             _llm_client = OpenAI(
-                api_key="sk-e7ccc027dcab4822bf054d96d052c032",
+                api_key=api_key,
                 base_url="https://api.deepseek.com/v1"
             )
         except ImportError:

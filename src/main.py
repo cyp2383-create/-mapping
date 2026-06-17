@@ -14,8 +14,10 @@ Talent Miner — AI 人才获取系统
   python main.py --mode full --position-id 1
 """
 
-import sys, json, yaml, time, argparse, urllib.parse
+import sys, json, yaml, time, argparse, urllib.parse, os
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent))
 
 from storage import (init_db, create_position, list_positions, get_position,
@@ -24,7 +26,7 @@ from storage import (init_db, create_position, list_positions, get_position,
 from contact import enrich_contact
 from exporter import export_excel, export_excel_jds
 
-DEEPSEEK = "sk-e7ccc027dcab4822bf054d96d052c032"
+DEEPSEEK = os.getenv("DEEPSEEK_KEY", "")
 
 SOURCES = {
     "maimai":    ("sources.maimai",   "MaimaiSource"),

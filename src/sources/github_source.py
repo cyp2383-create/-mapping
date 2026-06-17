@@ -5,13 +5,13 @@ GitHub API — 免费技术人才搜索
 详情: GET /users/{username}
 限制: 无认证60次/小时, 有Token 5000次/小时
 """
-import json, time
+import json, time, os
 import httpx
 from .base import PlatformSource
 
 
 GITHUB_API = "https://api.github.com"
-GITHUB_TOKEN = ""  # Optional: increase rate limit to 5000/hr
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")  # Optional: increase rate limit to 5000/hr
 
 
 class GitHubSource(PlatformSource):

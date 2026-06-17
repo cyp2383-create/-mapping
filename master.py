@@ -14,11 +14,13 @@ Talent Mapper — 一键人才地图生成
 """
 
 import os, sys, json, time, argparse, subprocess
+from dotenv import load_dotenv
+load_dotenv()
 sys.path.insert(0, 'src')
 
 os.environ['NO_PROXY'] = 'api.deepseek.com,api.tavily.com'
-DEEPSEEK_KEY = "sk-e7ccc027dcab4822bf054d96d052c032"
-TAVILY_KEY   = "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"
+DEEPSEEK_KEY = os.getenv("DEEPSEEK_KEY", "")
+TAVILY_KEY   = os.getenv("TAVILY_KEY", "")
 
 
 def run(cmd):
@@ -202,6 +204,11 @@ JDs:
 
 
 def main():
+    if not DEEPSEEK_KEY or not TAVILY_KEY:
+        print("[ERROR] Missing DEEPSEEK_KEY or TAVILY_KEY in .env file")
+        print("  cp .env.example .env  # then edit with your real keys")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="Talent Mapper")
     parser.add_argument("--industry", required=True, help="e.g. AI大模型, 新能源汽车")
     parser.add_argument("--role", required=True, help="e.g. AI产品经理, 电池研发工程师")
