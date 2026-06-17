@@ -38,13 +38,24 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s ease}
 .progress-text{font-size:12px;color:var(--text-secondary);margin-top:8px}
-/* ===== Guide Row ===== */
-.guide-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:20px 24px;border-bottom:1px solid var(--border)}
-.guide-item{text-align:center;padding:12px 8px}
-.guide-icon{font-size:22px;display:block;margin-bottom:6px}
-.guide-title{font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:2px}
-.guide-desc{font-size:11px;color:var(--text-muted);line-height:1.5}
+/* ===== Workflow Row ===== */
+.wf-row{display:flex;align-items:center;justify-content:center;gap:8px;padding:18px 24px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.wf-step{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:12px 18px;min-width:140px;transition:all .3s}
+.wf-step.active{border-color:var(--accent);background:rgba(245,158,11,.06);box-shadow:0 0 12px var(--accent-glow)}
+.wf-num{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--text-secondary);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.wf-step.active .wf-num{background:var(--accent);color:#0a0a0a}
+.wf-body{display:flex;flex-direction:column;gap:2px}
+.wf-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.3}
+.wf-sub{font-size:11px;color:var(--text-muted);line-height:1.4}
+.wf-step.active .wf-sub{color:var(--text-secondary)}
+.wf-arrow{font-size:18px;color:var(--text-muted);font-weight:300}
+.wf-branch{min-width:280px}
+.wf-branches{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.wf-br{font-size:11px;color:var(--text-muted);line-height:1.5;padding:2px 0}
+.wf-br.done{color:var(--accent)}
 .tab .tcnt{font-size:11px;background:rgba(245,158,11,.15);color:#fcd34d;padding:1px 7px;border-radius:20px;margin-left:4px;font-weight:600}
+.wf-step.done{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.04)}
+.wf-step.done .wf-num{background:#10b981;color:#fff}
 .tabs{display:flex;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);padding:0 4px}
 .tab{padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text-secondary);transition:all .15s;font-family:inherit;border-bottom:2px solid transparent}
 .tab:hover{color:var(--text)}
@@ -83,7 +94,7 @@ tr:hover td{background:var(--surface-hover)}
 .history-meta{font-size:12px;color:var(--text-secondary)}
 .empty{text-align:center;padding:48px;color:var(--text-muted);font-size:14px}
 .footer{text-align:center;padding:40px;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border)}
-@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}.guide-row{grid-template-columns:repeat(2,1fr)}.guide-item{padding:8px 4px}}
+@media(max-width:640px){.hero{padding:48px 16px 36px}.hero h1{font-size:28px}.input-row{flex-direction:column}.input-group{min-width:100%}.wf-row{flex-direction:column;gap:6px}.wf-arrow{transform:rotate(90deg)}.wf-step,.wf-branch{min-width:auto;width:100%}}
 </style>
 </head>
 <body>
@@ -110,11 +121,12 @@ tr:hover td{background:var(--surface-hover)}
 </div>
 
 <div class="card" id="results" style="display:none">
-  <div class="guide-row" id="guideRow">
-    <div class="guide-item"><span class="guide-icon">🔍</span><span class="guide-title">Agent搜索</span><span class="guide-desc">Tavily + LinkedIn 实时采集市场候选人 & JD</span></div>
-    <div class="guide-item"><span class="guide-icon">🧠</span><span class="guide-title">AI推理</span><span class="guide-desc">DeepSeek 分析技能趋势 & 能力画像</span></div>
-    <div class="guide-item"><span class="guide-icon">💬</span><span class="guide-title">追问顾问</span><span class="guide-desc">描述业务场景，AI精准构建人才画像</span></div>
-    <div class="guide-item"><span class="guide-icon">📊</span><span class="guide-title">人才报告</span><span class="guide-desc">生成后可在线查看或下载HTML报告</span></div>
+  <div class="wf-row" id="wfRow">
+    <div class="wf-step" id="wfStep1"><span class="wf-num">1</span><div class="wf-body"><span class="wf-title">输入需求</span><span class="wf-sub">行业 + 岗位</span></div></div>
+    <span class="wf-arrow">→</span>
+    <div class="wf-step" id="wfStep2"><span class="wf-num">2</span><div class="wf-body"><span class="wf-title">Agent搜索</span><span class="wf-sub" id="wfSearchSub">等待输入</span></div></div>
+    <span class="wf-arrow">→</span>
+    <div class="wf-step wf-branch" id="wfStep3"><span class="wf-num">3</span><div class="wf-body"><span class="wf-title">AI分析</span><div class="wf-branches"><span class="wf-br" id="wfChat">💬 追问顾问 — 描述业务场景，精准构建人才画像</span><span class="wf-br" id="wfReport">📊 人才报告 — 在线查看或下载</span></div></div></div>
   </div>
   <div class="tabs">
     <button class="tab active" id="tabBtn-talents" onclick="switchTab('talents')">收集到的候选人<span id="tBadge" style="display:none"></span></button>
@@ -151,6 +163,7 @@ async function startGenerate(){
   document.getElementById('btnOpenReport').textContent='报告生成中...';
   document.getElementById('btnOpenReport').style.color='var(--text-secondary)';
   updateProgress(5,'连接中...');
+  updateWorkflow(1); // Step 1 done (user already filled input)
   try{
     const resp=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({industry,role,city:document.getElementById('city').value.trim()})});
     const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='';
@@ -159,11 +172,15 @@ async function startGenerate(){
       buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div>';showResults(d);}
+          if(d.step==='companies'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);document.getElementById('results').style.display='';}
+          else if(d.step==='jds'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
+          else if(d.step==='talents'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
+          else if(d.step==='enrich'){updateProgress(d.progress,d.text);updateWorkflow(2,d.text);}
+          else if(d.step==='data_ready'){updateProgress(65,'数据已就绪');currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头顾问。</strong><br><br>告诉我你的业务场景，我帮你从市场数据中构建精准的人才画像。<br><br>💡 <em>例如：<br>"我们部门在做AI转型，需要招一个能带队落地大模型应用的技术负责人"<br>"我们是出海电商团队，想找一个懂东南亚市场的增长负责人"</em></div>';showResults(d);}
           else if(d.step==='report_progress'){updateProgress(d.progress,d.text);document.getElementById('btnOpenReport').textContent='生成中...'+d.chars+'字';}
-          else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);}
+          else if(d.step==='report_ready'){updateProgress(100,'完成');if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('wfChat').classList.add('done');document.getElementById('wfReport').classList.add('done');}
           else if(d.step==='error'){alert(d.text);}
-          else{updateProgress(d.progress||50,d.text||'处理中...');if(d.companies)document.getElementById('results').style.display='';}
+          else{updateProgress(d.progress||50,d.text||'处理中...');}
         }catch(e){}
       }
     }
@@ -171,20 +188,25 @@ async function startGenerate(){
   setTimeout(()=>{p.classList.remove('active');b.disabled=false},500);
 }
 function updateProgress(pct,text){document.getElementById('progressFill').style.width=pct+'%';document.getElementById('progressText').textContent=text;}
+function updateWorkflow(step,sub){
+  // Activate workflow steps
+  if(step>=1) document.getElementById('wfStep1').classList.add('done');
+  if(step>=2){document.getElementById('wfStep2').classList.add('active');if(sub)document.getElementById('wfSearchSub').textContent=sub;}
+  if(step>=3){document.getElementById('wfStep2').classList.remove('active');document.getElementById('wfStep2').classList.add('done');document.getElementById('wfStep3').classList.add('active');
+    if(sub)document.getElementById('wfSearchSub').textContent=sub;}
+}
 function showResults(data){
   document.getElementById('results').style.display='';
-  // Update tab badges with counts
   const tc=data.talents?.length||0, jc=data.jds?.length||0;
   const tBadge=document.getElementById('tBadge'), jBadge=document.getElementById('jBadge');
   if(tc>0){tBadge.textContent=tc;tBadge.style.display='inline';}else{tBadge.style.display='none';}
   if(jc>0){jBadge.textContent=jc;jBadge.style.display='inline';}else{jBadge.style.display='none';}
-  // Update guide row with tier breakdown
+  // Workflow: step 2 done, step 3 active
+  updateWorkflow(3, `采集 ${tc} 位候选人 · ${jc} 条JD · ${data.companies?.length||0} 家公司`);
+  // Update AI branch details
   if(data.tier_stats){
-    document.getElementById('guideRow').innerHTML=`
-      <div class="guide-item"><span class="guide-icon">🔍</span><span class="guide-title">Agent搜索</span><span class="guide-desc">采集 ${tc} 位候选人 · ${jc} 条JD · ${data.companies?.length||0} 家公司</span></div>
-      <div class="guide-item"><span class="guide-icon">🧠</span><span class="guide-title">AI推理</span><span class="guide-desc">高端 <b style="color:#10b981">${data.tier_stats.high}</b> · 中端 <b style="color:#f59e0b">${data.tier_stats.mid}</b> · 入门 <b style="color:#6366f1">${data.tier_stats.low}</b></span></div>
-      <div class="guide-item"><span class="guide-icon">💬</span><span class="guide-title">追问顾问</span><span class="guide-desc">描述业务场景，AI精准构建人才画像</span></div>
-      <div class="guide-item"><span class="guide-icon">📊</span><span class="guide-title">人才报告</span><span class="guide-desc">生成后可在线查看或下载HTML报告</span></div>`;
+    document.getElementById('wfChat').innerHTML='💬 追问顾问 — 描述业务场景，精准构建人才画像';
+    document.getElementById('wfReport').innerHTML=`📊 人才报告 — 高端<b style="color:#10b981">${data.tier_stats.high}</b> · 中端<b style="color:#f59e0b">${data.tier_stats.mid}</b> · 入门<b style="color:#6366f1">${data.tier_stats.low}</b>`;
   }
   const rb=document.getElementById('btnOpenReport');
   if(data.report_html&&data.report_html.length>100){rb.textContent='查看报告('+data.report_html.length+'字)';rb.style.color='#f59e0b';document.getElementById('btnDownloadReport').style.display='';}else{rb.textContent='暂无报告';rb.style.color='var(--text-secondary)';document.getElementById('btnDownloadReport').style.display='none';}
