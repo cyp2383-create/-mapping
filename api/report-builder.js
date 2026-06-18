@@ -38,7 +38,8 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 
 ### 1. trend_summary
 用一段话回答: 以前需要什么？现在需要什么？这对招聘意味着什么？
-**将3-5个最核心的关键词用HTML粗体&lt;b&gt;标签包裹**, 帮助用户一眼定位重点。不要全段加粗,只标最关键的洞察词。
+- **将3-5个核心关键词用粗体&lt;b&gt;包裹**帮助定位重点
+- 末尾必须加一句: <span style="color:#707070;font-size:12px">※ 趋势分析为AI基于训练数据的推理，仅供招聘决策参考</span>
 
 ### 2. current_top
 从高频技能选TOP 8。每个skill必须用3-6字具体描述,让用户一眼看懂。
@@ -47,14 +48,16 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 每个给一个热度权重分(0-100整数,代表该技能在JD中出现的相对频率,100=出现次数最多的技能)。分数必须参考JD高频技能数据中的实际出现频次,高频次=高分,不能随意编造。
 每个skill还要给出category分类: "通用能力"、"专业技能"、"工具技术" 三选一。
 
-### 3. emerging (新增技能) - 必须列出至少5个，少于5个视为不合格
-最近12个月新出现的方向。每个skill同样必须用具体描述(3-8字)。推断2-3个细分方向。每个细分方向12字内说明为什么是趋势。
+### 3. emerging (市场新增方向) [AI推断] - 至少5个
+基于你的训练数据,推断最近12个月新出现的方向。每个skill用3-8字具体描述+2-3个细分方向。
 
-### 4. rising (上升技能) - 必须列出至少5个，少于5个视为不合格
-需求增速明显超过平均的方向。同样要求具体描述+细分方向。
+### 4. rising (需求上升方向) [AI推断] - 至少5个
+基于你的训练数据,推断需求增速超过平均的方向。具体描述+细分方向。
 
-### 5. declining (衰退技能)
-2年前热门但现在JD中需求明显下降的技能。
+### 5. declining (需求减弱方向) [数据+AI推断]
+当前JD中出现极少的技能。每个必须同时给出:
+- reason: AI推断的衰退原因
+- evidence: JD数据中的具体信号(频次变化、替代信号)
 重要规则:
 - 每个衰退技能必须引用JD数据中的具体信号佐证（如"JD中该词频次从X次降至Y次""被XX技能/工具替代，因为JD中XX出现频次上升"）
 - 禁止使用"被AI自动化替代""被AI取代"等模糊笼统结论
@@ -340,9 +343,9 @@ h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 
 <!-- TREND DETAIL -->
 <h2>技能变化趋势</h2>
-${trendCard(trend?.emerging, '新增技能', '🆕', '#10b981', true, false)}
-${trendCard(trend?.rising, '上升技能', '📈', '#f59e0b', true, false)}
-${trendCard(trend?.declining, '衰退技能', '📉', '#ef4444', false, true)}
+${trendCard(trend?.emerging, '市场新增方向 [AI推断]', '🆕', '#10b981', true, false)}
+${trendCard(trend?.rising, '需求上升方向 [AI推断]', '📈', '#f59e0b', true, false)}
+${trendCard(trend?.declining, '需求减弱方向 [数据+AI推断]', '📉', '#ef4444', false, true)}
 
 <!-- KANBAN WALL -->
 <h2>三档人才能力看板</h2>
