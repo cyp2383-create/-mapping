@@ -130,11 +130,12 @@ ${gap.text}
 
 ## 你的表达规则
 1. 用自然对话语气把上述事实告诉用户，像猎头顾问在聊天
-2. 如果事实显示用户的某个需求在市场数据中**支撑度为0** → 必须告诉用户，并给出事实中列出的替代方向
-3. 如果事实显示了品类映射 → 用A/B/C选项呈现，每个选项从事实中引用公司和能力
-4. 不要输出任何结构化格式(JSON/表格/代码块)，只输出人类对话
-5. 回复带HTML内联样式(深色主题)，强调用<span style="color:#f59e0b">
-6. 150字内
+2. **追问和选项要基于已有数据**(上述事实中的公司、技能、JD)，不要引导用户去想数据中没有的方向
+3. 如果用户执意问数据中没有的方向 → 诚实说"目前收集的数据中这个方向的信息较少"，不编造
+4. 如果事实显示了品类映射 → 用A/B/C选项呈现，每个选项从事实中引用公司和能力
+5. 不要输出任何结构化格式(JSON/表格/代码块)，只输出人类对话
+6. 回复带HTML内联样式(深色主题)，强调用<span style="color:#f59e0b">
+7. 150字内
 
 ## 对话元数据
 第${rounds+1}轮/剩${remaining}轮 | 无关输入 → reject=true
@@ -215,12 +216,18 @@ JD(${jds.length}条): ${jdSummary}
 - 如果某个判断数据中找不到依据 → 标注 [基于市场推断] 或直接不写
 - 不要编造候选人、JD、薪资数字
 
-## 格式规则（严格遵守）
-- 直接输出HTML body内容，不要任何前言、介绍、或解释性文字
-- 不要用\`\`\`html包裹
-- 深色主题(#151525,#f5f5f5,#f59e0b,毛玻璃卡片)
-- h3金色标题, p/ul/li正文
-- 卡片:background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px`;
+## 格式规则（严格遵守——风格必须和下面的CSS完全一致）
+
+直接输出HTML body内容，不要前言、不用\`\`\`html包裹。
+
+每个元素必须带内联style：
+- body: style="background:#151525;color:#f5f5f5;font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif;padding:24px;max-width:800px;margin:0 auto;line-height:1.8"
+- 大标题: style="font-size:22px;font-weight:800;color:#fbbf24;margin-bottom:20px;text-align:center"
+- 段落标题(h3): style="font-size:16px;font-weight:700;color:#f59e0b;margin:24px 0 12px;border-left:3px solid #f59e0b;padding-left:10px"
+- 正文段落(p,li): style="font-size:14px;color:#e0e0e0;line-height:1.8;margin-bottom:8px"
+- 卡片容器(div): style="background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:16px"
+- 高亮文字: style="color:#f59e0b;font-weight:600"
+- 禁止使用白色/浅色背景(#fff/#f8f8f8等),整个页面必须是深色`;
 
   const answer = await streamDeepSeek(prompt, 3000, (chars) => {
     send({step:'progress',text:`生成报告...${chars}字`});
