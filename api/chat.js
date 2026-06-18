@@ -30,42 +30,11 @@ export default async function handler(req, res) {
   } catch(e) { send({step:'error',text:e.message}); res.end(); }
 }
 
-// ===== Stage 1: Deterministic Gap Analysis =====
+// ===== Stage 1: Lightweight Market Facts (code, not LLM) =====
 
 function analyzeGap(question, jds, companies, industry, role) {
   const totalJDs = jds.length || 1;
-
-  // Extract domain context from user's message (not every word)
-  // Focus on business domains and specialty areas, ignore conversational fillers
-  const domainPatterns = [
-    /(?:人力|HR|招聘|培训|绩效|薪酬|员工|组织|人才|入职|离职)/g,
-    /(?:AI|大模型|算法|模型|智能|自动化|数字化)/g,
-    /(?:采购|供应链|物流|仓储|供应商)/g,
-    /(?:金融|风控|合规|支付|信贷|保险)/g,
-    /(?:电商|增长|用户|流量|转化|投放|广告|商业化)/g,
-    /(?:SaaS|PaaS|云|平台|中台|系统|架构)/g,
-    /(?:出海|海外|跨境|国际化|东南亚|欧美)/g,
-  ];
-  const domains = [];
-  domainPatterns.forEach(p => {
-    const m = question.match(p);
-    if (m) domains.push(...m);
-  });
-
-  // Extract what the user is actually looking for beyond the base role
-  // e.g., if role is "AI产品经理" and user mentions "HR", the specialty is "HR方向"
-  const baseRole = role || '';
-  const specialtyKeywords = [...new Set(domains.filter(d => !baseRole.includes(d)))].slice(0, 5);
-
-  // Check if the specialty domain appears in JDs
-  const specialtyInJDs = specialtyKeywords.map(kw => {
-    let count = 0;
-    jds.forEach(j => {
-      const txt = (j.snippet||'') + (j.title||'') + (j.tools||'');
-      if (txt.includes(kw)) count++;
-    });
-    return { kw, count, pct: Math.round(count / totalJDs * 100) };
-  }).filter(s => s.count > 0);
+  const totalTalents = 0; // talents count passed separately, not needed here
 
   // Find most frequently mentioned skills in JDs
   const skillFreq = {};
@@ -79,41 +48,20 @@ function analyzeGap(question, jds, companies, industry, role) {
   // Top companies
   const companyStats = companies.slice(0, 5);
 
-  // Build facts for LLM
+  // Build minimal facts — no keyword matching, no domain analysis, no relevance scoring
   let text = '';
-  text += `[背景] 用户搜索岗位: ${industry||'未知行业'} · ${baseRole||'未知岗位'}。共${totalJDs}条JD。\n`;
-
-  if (specialtyKeywords.length > 0) {
-    text += `[领域] 用户描述中隐含的特殊方向: ${specialtyKeywords.join('、')}\n`;
-    if (specialtyInJDs.length > 0) {
-      text += `[领域-市场] 这些方向在JD中出现频率: ${specialtyInJDs.map(s => `${s.kw}(${s.pct}%)`).join('、')}\n`;
-    }
-    // Only flag a gap if the domain is significantly underrepresented (<20% of JDs)
-    const lowDomain = specialtyInJDs.filter(s => s.pct < 20);
-    if (lowDomain.length > 0 && specialtyInJDs.length > 0) {
-      text += `[洞察] ${lowDomain.map(s => s.kw).join('、')}方向在JD中出现较少(<20%),但这个可能是用户的核心需求。不要否定用户方向,而是告诉用户这个方向的市场现状和替代路径。\n`;
-    }
-  }
-
+  text += `[背景] 用户搜索: ${industry||'未知'} · ${role||'未知'}。共${totalJDs}条JD, ${companies.length}家公司。\n`;
   text += `[市场] JD高频技能: ${topSkills.map(([s,c]) => `${s}(${c}次)`).join('、')}\n`;
-  text += `[市场] 候选公司: ${companyStats.join('、')}\n`;
+  text += `[市场] 候选来源: ${companyStats.join('、')}\n`;
+  text += `[规则] 不要用代码关键词匹配的结果去'纠正'用户。相关性由你的语言理解判断,不由关键词匹配判断。\n`;
 
-  // Only flag genuine contradictions: user wants something that almost never appears
-  const allSpecialtyRare = specialtyInJDs.length > 0 && specialtyInJDs.every(s => s.pct < 10);
-  if (allSpecialtyRare) {
-    text += `[注意] 用户提到的领域方向在JD中都很少见(<10%)。不要纠正用户的说法,而是帮他理解: 这个方向的人才市场上可能不叫这个名字,或者需要从相邻方向找人。给出相近的市场方向作为参考。\n`;
-  }
-
-  return { text, specialtyKeywords, specialtyInJDs, topSkills };
+  return { text, topSkills };
 }
 
 // ===== Main: Translator =====
 
 async function translate(question, talents, jds, companies, history, send, industry, role) {
   send({step:'progress',text:'正在比对JD数据...'});
-
-  const rounds = history.filter(h => h.role === 'user').length;
-  const remaining = Math.max(0, 10 - rounds);
 
   const historyText = history.map(h =>
     `${h.role==='user'?'业务方':'翻译官'}: ${h.content}`
@@ -129,22 +77,25 @@ async function translate(question, talents, jds, companies, history, send, indus
 ${gap.text}
 
 ## 你的表达规则
-1. 用自然对话语气把上述事实告诉用户，像猎头顾问在聊天
-2. **追问和选项要基于已有数据**(上述事实中的公司、技能、JD)，不要引导用户去想数据中没有的方向
-3. 如果用户执意问数据中没有的方向 → 诚实说"目前收集的数据中这个方向的信息较少"，不编造
-4. 如果事实显示了品类映射 → 用A/B/C选项呈现，每个选项从事实中引用公司和能力
-5. 不要输出任何结构化格式(JSON/表格/代码块)，只输出人类对话
-6. 回复带HTML内联样式(深色主题)，强调用<span style="color:#f59e0b">
-7. 150字内
+1. 用猎头顾问的语气自然对话
+2. 追问和选项基于市场事实中的公司、技能、JD。**相关性由你判断，不由关键词匹配判断。** 即使某个词没在JD中出现，只要业务逻辑合理，就是相关方向
+3. 用户选择某个方向后 → 基于这个方向给具体信息，不要反过来否定用户的选择
+4. 如果数据确实不足以支撑某个方向 → 诚实说"数据有限"并给出你能看到的最近似方向
+5. A/B/C选项用市场事实支撑，每个选项引用公司和技能
+6. HTML内联样式(深色主题), 强调用<span style="color:#f59e0b">, 150字内
 
-## 对话元数据
-第${rounds+1}轮/剩${remaining}轮 | 无关输入 → reject=true
+## 收束信号(任一触发即设置offer_report=true,不设硬性轮次上限)
+1. 用户重复追问类似问题 → 信息已到边界
+2. 用户连续2轮肯定你的理解 → 需求已清晰
+3. 用户选择了某个具体方向 → 画像已锁定
+4. 你在重复之前的追问 → 没有新的有效问题了
+5. 用户明确说"可以了/懂了/生成吧" → 用户主动收束
 
 ## 对话历史
 ${historyText || '(第一轮)'}
 
 ## 输出JSON(只JSON,不要其他文字)
-{"reject":bool,"message":"HTML回复","offer_report":bool${remaining <= 3 ? ', 剩余轮次<=3请设为true' : ''},"understanding":"","remaining":${remaining},"suggestions":["选项1","选项2"]}`;
+{"reject":bool,"message":"HTML回复","offer_report":bool,"understanding":"收束理由(offer_report=true时)","suggestions":["选项1","选项2"]}`;
 
   const raw = await streamDeepSeek(prompt, 1000, (chars) => {
     send({step:'progress',text:`组织回复...${chars}字`});
@@ -155,12 +106,12 @@ ${historyText || '(第一轮)'}
     if (t.startsWith('```')) t = t.replace(/```json?|```/g, '');
     const result = JSON.parse(t);
     if (result.reject) {
-      send({step:'done', message:result.message, offer_report:false, remaining:remaining, suggestions:[]});
+      send({step:'done', message:result.message, offer_report:false, suggestions:[]});
     } else {
-      send({step:'done', message:result.message, offer_report:result.offer_report||false, understanding:result.understanding||'', remaining:result.remaining||remaining, suggestions:result.suggestions||[]});
+      send({step:'done', message:result.message, offer_report:result.offer_report||false, understanding:result.understanding||'', suggestions:result.suggestions||[]});
     }
   } catch(e) {
-    send({step:'done', message:raw, offer_report:false, remaining:remaining, suggestions:[]});
+    send({step:'done', message:raw, offer_report:false, suggestions:[]});
   }
 }
 
