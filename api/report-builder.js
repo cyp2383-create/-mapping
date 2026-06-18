@@ -127,15 +127,15 @@ ${jdCtx || '无JD数据'}
 ### B. 纵向评分 (每档三层)
 对每个档位，描述三个水平层次:
 
-**p75 (75%分位)** = 该档位Top 25%顶尖表现
-- capabilities: 3条核心能力特征
-- skills: 3-5个核心技能
-- project_example: 一个具体项目示例，引用JD中提到的真实业务场景。格式"能主导【JD中的业务场景】项目，输出【具体产出】"
+**p75 (75分位)** = 该档位高端水平 [AI推断]
+- capabilities(3条): 基于候选人+JD数据综合分析 [数据+AI推断]
+- skills(3-5个): 基于JD高频技能 [数据]
+- project_example: 引用JD真实业务场景 [数据]
 
-**p50 (50%分位)** = 该档位中位水平
+**p50 (50分位)** = 该档位中位水平 [AI推断]
 同上结构
 
-**p25 (25%分位)** = 该档位入门门槛
+**p25 (25分位)** = 该档位入门水平 [AI推断]
 同上结构
 
 只返回JSON:
@@ -254,9 +254,9 @@ export function buildRedesignedReportHTML(skills, trend, tiers, talents, highN, 
         <span class="kb-label" style="color:${color}">${label}</span>
         <span class="kb-count">${count}人</span>
       </div>
-      ${scoreCard(tierKey, 'p75', '顶尖 Top 25%', 4)}
-      ${scoreCard(tierKey, 'p50', '中位 50%', 3)}
-      ${scoreCard(tierKey, 'p25', '入门 25%', 2)}
+      ${scoreCard(tierKey, 'p75', '75分位 [AI推断]', 4)}
+      ${scoreCard(tierKey, 'p50', '50分位 [AI推断]', 3)}
+      ${scoreCard(tierKey, 'p25', '25分位 [AI推断]', 2)}
     </div>`;
   };
 
