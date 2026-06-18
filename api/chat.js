@@ -28,10 +28,73 @@ export default async function handler(req, res) {
   } catch(e) { send({step:'error',text:e.message}); res.end(); }
 }
 
+// ===== Stage 1: Deterministic Gap Analysis =====
+
+function analyzeGap(question, jds, companies) {
+  // Extract meaningful Chinese/English keywords from user question
+  const words = question.match(/[一-龥]{2,}|[a-zA-Z]{2,}/g) || [];
+  const stopWords = new Set(['我们','公司','部门','需要','想要','一个','这个','什么','怎么','如何','为什么','因为','所以','但是','可以','还是','或者','已经','正在','准备','打算','做','搞','招','找','帮忙','帮','分析','看看','推荐','建议','画像','人才','岗位']);
+  const keywords = [...new Set(words.filter(w => !stopWords.has(w) && w.length >= 2))].slice(0, 8);
+
+  // Count keyword occurrences in JDs (single and combinations)
+  const totalJDs = jds.length || 1;
+  const kwStats = keywords.map(kw => {
+    let count = 0;
+    jds.forEach(j => {
+      const txt = (j.snippet||'') + (j.title||'') + (j.tools||'');
+      if (txt.includes(kw)) count++;
+    });
+    return { kw, count, pct: Math.round(count / totalJDs * 100) };
+  }).sort((a, b) => b.pct - a.pct);
+
+  // Check co-occurrence of top 2 keywords
+  const top2 = kwStats.slice(0, 2);
+  let coOccur = 0;
+  if (top2.length >= 2) {
+    jds.forEach(j => {
+      const txt = (j.snippet||'') + (j.title||'') + (j.tools||'');
+      if (txt.includes(top2[0].kw) && txt.includes(top2[1].kw)) coOccur++;
+    });
+  }
+
+  // Find most frequently mentioned skills in JDs (top categories)
+  const skillFreq = {};
+  const skillKWs = ['AI','大模型','数据','产品','开发','架构','算法','运营','策略','分析','管理','设计','系统','平台','Agent','RAG','Python','SQL','Go','Java','业务','行业','增长','商业化','采购','供应链','风控','合规'];
+  jds.forEach(j => {
+    const txt = (j.snippet||'') + (j.title||'') + (j.tools||'');
+    skillKWs.forEach(s => { if (txt.toLowerCase().includes(s.toLowerCase())) skillFreq[s] = (skillFreq[s]||0) + 1; });
+  });
+  const topSkills = Object.entries(skillFreq).sort((a,b) => b[1]-a[1]).slice(0, 6);
+
+  // Top companies with talent count
+  const companyStats = companies.slice(0, 5);
+
+  // Build deterministic facts for LLM to express
+  let text = '';
+  text += `[事实] 共${totalJDs}条JD数据。\n`;
+
+  if (kwStats.length > 0) {
+    text += `[事实] 用户关键词在JD中出现频率: ${kwStats.map(k => `${k.kw}(${k.pct}%)`).join('、')}\n`;
+  }
+
+  if (top2.length >= 2 && coOccur === 0) {
+    text += `[事实-纠偏] 用户提到的"${top2[0].kw}+${top2[1].kw}"组合在所有JD中同时出现0次(${totalJDs}条JD中无一条同时包含这两个词)。市场支撑度: 0%。用户需要被告知这个组合在市场上极少见。\n`;
+  }
+
+  text += `[事实] 市场JD最常出现的技能: ${topSkills.map(([s,c]) => `${s}(${c}次)`).join('、')}\n`;
+  text += `[事实] 候选来源公司: ${companyStats.join('、')}\n`;
+
+  if (kwStats.filter(k => k.pct > 50).length >= 2) {
+    text += `[事实-品类] 用户的描述可能对应市场多个方向。如果用户需求模糊,可以帮他拆分为不同品类做选择。\n`;
+  }
+
+  return { text, keywords: kwStats, coOccur, topSkills };
+}
+
 // ===== Main: Translator =====
 
 async function translate(question, talents, jds, companies, history, send) {
-  send({step:'progress',text:'理解需求中...'});
+  send({step:'progress',text:'正在比对JD数据...'});
 
   const rounds = history.filter(h => h.role === 'user').length;
   const remaining = Math.max(0, 10 - rounds);
@@ -40,53 +103,31 @@ async function translate(question, talents, jds, companies, history, send) {
     `${h.role==='user'?'业务方':'翻译官'}: ${h.content}`
   ).join('\n');
 
-  const companyList = companies.join('、');
-  const jdExcerpts = jds.slice(0, 5).map(j =>
-    `${j.company}: ${j.title} — ${(j.snippet||'').substring(0, 120)}`
-  ).join('\n');
+  // ===== Stage 1: Deterministic gap analysis (code, not LLM) =====
+  const gap = analyzeGap(question, jds, companies);
 
-  const prompt = `你是「猎头翻译官」—— 你的角色是连接业务方和猎头市场的桥梁。
+  // ===== Stage 2: LLM expresses facts in natural language =====
+  const prompt = `你是「猎头翻译官」—— 你只负责把市场事实翻译成自然语言，不负责判断和推理。
 
-## 背景
-业务方很懂自己的业务，但不清楚:
-1. 市场上有什么样的人才
-2. 怎么把业务需求翻译成人才画像
-3. 如何高效和猎头沟通要找什么人
+## 已计算的事实（你必须基于这些事实回复，不能否认、忽略、或编造新的事实）
+${gap.text}
 
-你的工作: 帮业务方理清思路，把模糊的业务描述转化为精准的人才画像，并指出他们对市场认知的偏差。
+## 你的表达规则
+1. 用自然对话语气把上述事实告诉用户，像猎头顾问在聊天
+2. 如果事实显示用户的某个需求在市场数据中**支撑度为0** → 必须告诉用户，并给出事实中列出的替代方向
+3. 如果事实显示了品类映射 → 用A/B/C选项呈现，每个选项从事实中引用公司和能力
+4. 不要输出任何结构化格式(JSON/表格/代码块)，只输出人类对话
+5. 回复带HTML内联样式(深色主题)，强调用<span style="color:#f59e0b">
+6. 150字内
 
-## 核心规则
-1. **先判断输入是否和招聘/人才相关**。如果用户聊天气、闲聊、问无关问题 → 礼貌驳回，不计入轮次。回复JSON: {"reject":true,"message":"驳回理由(1句话)"}
-2. **有效对话最多10轮**。当前第${rounds+1}轮，剩余${remaining}轮。
-3. 如果已经是第8轮或更后 → offer_report=true
-4. 如果信息足够(业务目标+岗位定位基本清晰) → offer_report=true
-
-## 你的回复方式
-- 先acknowledge业务方的描述，帮他把模糊需求**翻译成猎头能听懂的人才语言**
-- 如果用户说"我还没想好"、"帮我理思路"等 → 基于市场数据，给他3个不同方向的思路选项（如"目前市场上有3类典型画像: A类侧重XX, B类侧重YY, C类侧重ZZ，你对哪个方向更感兴趣？"）
-- 如果他的认知和市场数据有差距，**指出来**
-- 追问时给2-3个具体选项，不要开放题
-- **引用市场数据**增加说服力
-
-## 市场数据
-候选人公司: ${companyList}
-JD参考: ${jdExcerpts}
+## 对话元数据
+第${rounds+1}轮/剩${remaining}轮 | 无关输入 → reject=true
 
 ## 对话历史
 ${historyText || '(第一轮)'}
 
-## 业务方消息
-${question}
-
-## 返回JSON
-{
-  "reject": true/false,
-  "message": "回复(HTML,深色主题,自然对话,200字内)",
-  "offer_report": true/false,
-  "understanding": "一句话总结理解(offer_report=true时需要)",
-  "remaining": ${remaining},
-  "suggestions": ["选项1","选项2"]
-}`;
+## 输出JSON(只JSON,不要其他文字)
+{"reject":bool,"message":"HTML回复","offer_report":bool${remaining <= 3 ? ', 剩余轮次<=3请设为true' : ''},"understanding":"","remaining":${remaining},"suggestions":["选项1","选项2"]}`;
 
   const raw = await streamDeepSeek(prompt, 1000, (chars) => {
     send({step:'progress',text:`组织回复...${chars}字`});
@@ -153,10 +194,14 @@ JD(${jds.length}条): ${jdSummary}
 ### 4. 候选推荐(简要)
 从市场数据中匹配2-3位最接近的候选人，按匹配度排序。
 
+## 事实核查规则（严格遵守）
+- 报告中提到的任何公司名、技能、薪资，必须能在市场数据中找到出处
+- 如果某个判断数据中找不到依据 → 标注 [基于市场推断] 或直接不写
+- 不要编造候选人、JD、薪资数字
+
 ## 格式规则（严格遵守）
 - 直接输出HTML body内容，不要任何前言、介绍、或解释性文字
 - 不要用\`\`\`html包裹
-- 不要写"以下是基于...生成的报告"之类的前导语
 - 深色主题(#151525,#f5f5f5,#f59e0b,毛玻璃卡片)
 - h3金色标题, p/ul/li正文
 - 卡片:background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px`;
