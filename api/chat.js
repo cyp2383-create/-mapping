@@ -62,10 +62,11 @@ async function translate(question, talents, jds, companies, history, send) {
 4. 如果信息足够(业务目标+岗位定位基本清晰) → offer_report=true
 
 ## 你的回复方式
-- 先acknowledge业务方的描述，帮他把模糊需求**翻译成猎头能听懂的人才语言**(如"你说的AI转型，在人才市场上对应的是XX方向，目前市场上有YY类人在做")
-- 如果他的认知和市场数据有差距，**指出来**("你提到的XX技能目前在JD中出现很少，市场上更看重YY")
+- 先acknowledge业务方的描述，帮他把模糊需求**翻译成猎头能听懂的人才语言**
+- 如果用户说"我还没想好"、"帮我理思路"等 → 基于市场数据，给他3个不同方向的思路选项（如"目前市场上有3类典型画像: A类侧重XX, B类侧重YY, C类侧重ZZ，你对哪个方向更感兴趣？"）
+- 如果他的认知和市场数据有差距，**指出来**
 - 追问时给2-3个具体选项，不要开放题
-- **引用市场数据**(JD/候选人)增加说服力
+- **引用市场数据**增加说服力
 
 ## 市场数据
 候选人公司: ${companyList}
@@ -108,6 +109,13 @@ ${question}
 // ===== Report Generator =====
 
 async function generateReport(question, talents, jds, companies, history, send) {
+  // Check if enough information was collected
+  const userMsgs = history.filter(h => h.role === 'user');
+  if (userMsgs.length < 2) {
+    send({step:'warning', message:'<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:12px;padding:16px;text-align:center"><p style="color:#fcd34d;margin:0 0 8px"><strong>⚠️ 信息还不够充分</strong></p><p style="color:#a8a8a8;font-size:13px;margin:0">目前只聊了'+userMsgs.length+'轮，信息不足以生成精准的人才画像。<br>建议再多聊几轮，或者回复：<span style="color:#f59e0b">"我还没想好，给我提供一些思路"</span></p></div>'});
+    return;
+  }
+
   send({step:'progress',text:'匹配市场数据...'});
 
   const talentSummary = talents.map(t =>
@@ -134,10 +142,10 @@ JD(${jds.length}条): ${jdSummary}
 
 ## 任务
 ### 1. 需求翻译
-把业务方的业务语言翻译成猎头市场的人才语言。告诉他: "你需要的其实是这样的人..."
+把业务方的业务语言翻译成猎头市场的人才语言。
 
 ### 2. 人才画像
-硬技能+软技能+理想背景+面试重点。如果用市场数据发现他的认知有偏差，指出来。
+硬技能+软技能+理想背景+面试重点。如果市场数据与用户认知有偏差，指出来。
 
 ### 3. 招聘建议
 去哪类公司找、薪资参考、常见坑。
@@ -145,8 +153,11 @@ JD(${jds.length}条): ${jdSummary}
 ### 4. 候选推荐(简要)
 从市场数据中匹配2-3位最接近的候选人，按匹配度排序。
 
-## 规则
-- 输出HTML body,深色主题(#151525,#f5f5f5,#f59e0b,毛玻璃卡片)
+## 格式规则（严格遵守）
+- 直接输出HTML body内容，不要任何前言、介绍、或解释性文字
+- 不要用\`\`\`html包裹
+- 不要写"以下是基于...生成的报告"之类的前导语
+- 深色主题(#151525,#f5f5f5,#f59e0b,毛玻璃卡片)
 - h3金色标题, p/ul/li正文
 - 卡片:background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px;margin-bottom:12px`;
 
@@ -154,5 +165,12 @@ JD(${jds.length}条): ${jdSummary}
     send({step:'progress',text:`生成报告...${chars}字`});
   });
 
-  send({step:'report', answer});
+  // Clean up any preamble or code fences
+  let clean = answer.trim();
+  if (clean.startsWith('```html')) clean = clean.split('\n').slice(1).join('\n');
+  if (clean.startsWith('```')) clean = clean.split('\n').slice(1).join('\n');
+  if (clean.endsWith('```')) clean = clean.slice(0, -3);
+  clean = clean.trim();
+
+  send({step:'report', answer:clean});
 }

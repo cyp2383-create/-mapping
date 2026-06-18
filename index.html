@@ -318,7 +318,8 @@ async function generatePersonaReport(){
       buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
-          if(d.step==='progress'){document.getElementById('dsChatState').textContent='💬 追问顾问 — ⟳ '+d.text;}
+          if(d.step==='progress'){document.getElementById('dsChatState').textContent='⟳ '+d.text;}
+          else if(d.step==='warning'){msgs.innerHTML+=d.message;saveChat();document.getElementById('dsBChat').classList.remove('active');document.getElementById('dsChatState').textContent='⚠ 信息不足';}
           else if(d.step==='report'){report=d.answer;currentData.chatReport=d.answer;document.getElementById('dsBChat').classList.add('done');document.getElementById('dsChatState').textContent='✓ 画像已生成';document.getElementById('dsChatAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openChatReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadChatReport()" style="color:#10b981;margin-left:4px">下载</button>';}
           else if(d.step==='error'){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">${d.text}</div>`;saveChat();return;}
         }catch(e){}
