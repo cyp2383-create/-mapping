@@ -275,17 +275,17 @@ function downloadReport(){if(!currentData||!currentData.report_html)return;const
 function confirmRegen(){if(confirm('重新生成将覆盖当前报告，确定继续？'))regenerateReport();}
 async function regenerateReport(){
   if(!currentData||!currentData._posId) return;
-  const btn=document.getElementById('btnRegenReport');btn.textContent='生成中...';
+  document.getElementById('dsReportState').textContent='⟳ 重新生成中...';
   try{
     const resp=await fetch('/api/regenerate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({position_id:currentData._posId})});
     const reader=resp.body.getReader();const decoder=new TextDecoder();let buffer='';
     while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;try{const d=JSON.parse(line.slice(6));
-        if(d.step==='progress'){btn.textContent=d.text;document.getElementById('dsReportState').textContent='⟳ '+d.text;}
-        else if(d.step==='done'){btn.textContent='完成!';currentData.report_html=d.report_html;document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='✓ 已更新';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">🔄 重新生成</button>';}
-        else if(d.error){btn.textContent='生成失败';}
+        if(d.step==='progress'){document.getElementById('dsReportState').textContent='⟳ '+d.text;}
+        else if(d.step==='done'){currentData.report_html=d.report_html;document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='✓ 已更新';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">重新生成</button>';}
+        else if(d.error){document.getElementById('dsReportState').textContent='生成失败';}
       }catch(e){}}}
-  }catch(e){btn.textContent='生成失败';}
+  }catch(e){document.getElementById('dsReportState').textContent='生成失败';}
 }
 function askQuestion(q){document.getElementById('chatInput').value=q;switchTab('chat');sendChat()}
 function getChatKey(){return 'chat_'+((currentData&&currentData._posId)||'default');}
@@ -378,7 +378,7 @@ async function loadHistory(){
   try{const resp=await fetch('/api/data?list=true');if(!resp.ok)throw new Error('API');const d=await resp.json();const p=d.positions||[];if(!p.length){el.innerHTML='<div class="empty">暂无历史报告</div>';return;}
   const fmtDate=(d)=>d?d.substring(0,10):'';el.innerHTML=p.map(x=>`<div class="history-item"><div><span style="font-weight:600">${x.name||'报告 #'+x.id}</span><span class="history-meta" style="margin-left:8px">${x.industry||''} · ${x.role_direction||''} · ${fmtDate(x.created_at)}</span></div><button class="btn btn-ghost btn-sm" onclick="loadPosition(${x.id})">查看</button></div>`).join('');}catch(e){el.innerHTML='<div class="empty">暂无历史报告</div>';}
 }
-async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头翻译官。</strong><br><br>我的角色是连接业务方和人才市场——你熟悉业务，我了解市场上有什么样的人。<br><br><span style="color:#f59e0b">先聊聊：你在做什么业务？想找一个什么样的人？</span></div>';showResults(data);document.getElementById('btnRegenReport').style.display='';loadChat();}
+async function loadPosition(id){const resp=await fetch('/api/data?position_id='+id);const data=await resp.json();data._posId=id;currentData=data;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头翻译官。</strong><br><br>我的角色是连接业务方和人才市场——你熟悉业务，我了解市场上有什么样的人。<br><br><span style="color:#f59e0b">先聊聊：你在做什么业务？想找一个什么样的人？</span></div>';showResults(data);loadChat();}
 loadHistory();
 </script>
 </body>
