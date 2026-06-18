@@ -44,7 +44,7 @@ export function buildTrendAnalysisPrompt(currentSkills, jdSnippets, industry, ro
 从高频技能选TOP 8。每个skill必须用3-6字具体描述,让用户一眼看懂。
 正例: "数字化采购平台搭建"、"AI辅助评标"、"供应商数据建模"
 反例: "采购"、"平台"、"数据"、"AI"(太泛,不合格)
-每个给一个热度权重分(0-100整数),分数必须参考JD高频技能数据中的实际出现频次,高频次=高分,不能随意编造。
+每个给一个热度权重分(0-100整数,代表该技能在JD中出现的相对频率,100=出现次数最多的技能)。分数必须参考JD高频技能数据中的实际出现频次,高频次=高分,不能随意编造。
 每个skill还要给出category分类: "通用能力"、"专业技能"、"工具技术" 三选一。
 
 ### 3. emerging (新增技能) - 必须列出至少5个，少于5个视为不合格
@@ -205,7 +205,7 @@ export function buildRedesignedReportHTML(skills, trend, tiers, talents, highN, 
     return `<div class="bar-row">
       <span class="bar-label">${s.skill}${catLabel}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c}"></div></div>
-      <span class="bar-val">${pct}</span>
+      <span class="bar-val">${pct}%</span>
     </div>`;
   }).join('');
 
