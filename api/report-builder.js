@@ -194,7 +194,7 @@ export function parseJSONResponse(raw) {
 
 // ===== HTML Builder =====
 
-export function buildRedesignedReportHTML(skills, trend, tiers, talents, highN, midN, lowN, industry, role, jdCount) {
+export function buildRedesignedReportHTML(skills, trend, tiers, talents, highN, midN, lowN, industry, role, jdCount, city) {
   const topSkills = trend?.current_top || skills.map(([k, v]) => ({ skill: k, score: Math.min(100, Math.round(v / Math.max(...skills.map(s => s[1]) || [1]) * 100)) })).slice(0, 8);
   const safeTiers = tiers || {};
   const safeLabels = safeTiers.horizontal_labels || { high: '高端人才', mid: '中端人才', low: '入门人才' };
@@ -263,16 +263,16 @@ export function buildRedesignedReportHTML(skills, trend, tiers, talents, highN, 
   return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>人才画像报告 - ${industry||''} ${role||''}</title><style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.08) 0%,transparent 50%),linear-gradient(180deg,#151525 0%,#121220 30%,#10101c 60%,#121220 100%);background-attachment:fixed;color:#f5f5f5;line-height:1.6;padding:32px 24px;max-width:1140px;margin:0 auto}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.08) 0%,transparent 50%),linear-gradient(180deg,#151525 0%,#121220 30%,#10101c 60%,#121220 100%);background-attachment:fixed;color:#e0e0e0;line-height:1.6;padding:32px 24px;max-width:1140px;margin:0 auto}
 h1{font-size:28px;font-weight:800;text-align:center;margin-bottom:4px;background:linear-gradient(135deg,#f5f5f5,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.5px}
 .subtitle{text-align:center;color:#a8a8a8;font-size:13px;margin-bottom:32px}
-h2{font-size:18px;font-weight:600;margin:36px 0 18px;border-left:3px solid #f59e0b;padding-left:12px;color:#f5f5f5}
+h2{font-size:18px;font-weight:600;margin:36px 0 18px;border-left:3px solid #f59e0b;padding-left:12px;color:#e0e0e0}
 h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 
 /* ===== Trend Summary ===== */
 .summary-card{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.15);backdrop-filter:blur(16px);border-radius:16px;padding:20px 24px;margin-bottom:28px;display:flex;gap:14px;align-items:flex-start}
 .summary-icon{font-size:24px;flex-shrink:0;line-height:1.6}
-.summary-text{font-size:15px;color:#fcd34d;line-height:1.9}
+.summary-text{font-size:15px;color:#e0e0e0}.summary-text b,.summary-text strong{color:#f59e0b;line-height:1.9}
 
 /* ===== Bar Chart ===== */
 .bar-chart{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
@@ -287,7 +287,7 @@ h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 .trend-group{margin-bottom:20px}
 .trend-card{background:rgba(255,255,255,.03);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px 18px;margin-bottom:8px}
 .trend-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
-.trend-skill{font-size:14px;font-weight:600;color:#f5f5f5}
+.trend-skill{font-size:14px;font-weight:600;color:#e0e0e0}
 .trend-reason{font-size:12px;color:#a8a8a8}
 .sub-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;padding-left:12px;border-left:2px solid rgba(99,102,241,.3)}
 .sub-tag{font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(99,102,241,.08);color:#a5b4fc;border:1px solid rgba(99,102,241,.15)}
@@ -302,7 +302,7 @@ h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 /* Column header */
 .kb-col-head{text-align:center;padding:16px 12px 20px;display:flex;flex-direction:column;align-items:center;gap:4px}
 .kb-dot{width:10px;height:10px;border-radius:50%}
-.kb-name{font-size:20px;font-weight:700;color:#f5f5f5}
+.kb-name{font-size:20px;font-weight:700;color:#e0e0e0}
 .kb-label{font-size:15px;font-weight:700}
 .kb-count{font-size:11px;color:#a8a8a8;margin-top:2px}
 
@@ -315,7 +315,7 @@ h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 .cap-pill{display:inline-block;padding:5px 12px;border-radius:20px;font-size:13px;font-weight:500;margin:2px 4px 4px 0;line-height:1.5}
 
 /* Skill chips — muted */
-.sk-chip{display:inline-block;padding:3px 9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;font-size:11px;color:#c0c0c0;margin:2px 3px 3px 0}
+.sk-chip{display:inline-block;padding:3px 9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;font-size:11px;color:#d0d0d0;margin:2px 3px 3px 0}
 
 /* Project example — subtle */
 .kb-proj{font-size:11px;color:#a8a8a8;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);line-height:1.7;font-style:italic}
@@ -332,7 +332,7 @@ h3{font-size:15px;font-weight:600;margin-bottom:8px;color:#e0e0e0}
 }
 </style></head><body>
 <h1>人才画像报告</h1>
-<div class="subtitle">${industry||''} · ${role||''} · 基于${talents.length}位候选人 · ${jdCount||0}条JD</div>
+<div class="subtitle">${industry||''} · ${role||''} · 基于${talents.length}位候选人 · ${jdCount||0}条JD${city ? " · "+city : ""}</div>
 
 <!-- TREND SUMMARY -->
 <div class="summary-card"><span class="summary-icon">📊</span><p class="summary-text">${trend?.trend_summary || '技能趋势分析生成中...'}</p></div>

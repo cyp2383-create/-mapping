@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       await generateTargetedReport(ai, tavily, industry, role, context, send);
     } else {
       // === STEP 1: 宏观市场报告 ===
-      await generateMacroReport(ai, tavily, industry, role, send);
+      await generateMacroReport(ai, tavily, industry, role, city, send);
     }
     res.end();
   } catch(e) {
@@ -89,7 +89,7 @@ function extractLevel(titleStr) {
 
 // ========== STEP 1: 宏观市场报告 ==========
 
-async function generateMacroReport(ai, tavily, industry, role, send) {
+async function generateMacroReport(ai, tavily, industry, role, city, send) {
   await initTables();
 
   send({step:'companies',text:'生成目标公司列表...',progress:5});
@@ -155,7 +155,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
     tier_stats:{high:highTier.length, mid:midTier.length, low:lowTier.length},
     companies:companies.slice(0,15).map(c=>c.name),
     questions:["描述我的业务场景,帮我构建人才画像","从哪家公司挖人最适合我的业务?","这些大厂在AI方面有什么动向?"],
-    stage:1
+    stage:1, city: city||''
   });
 
   // Await storage to guarantee the row exists before report UPDATE
@@ -166,7 +166,7 @@ async function generateMacroReport(ai, tavily, industry, role, send) {
   // PHASE 2: Generate report
   send({step:'report',text:'生成报告...',progress:70});
   try {
-    const reportHtml = await buildStreamingReport(ai, talentRows, jdRows, industry, role, send);
+    const reportHtml = await buildStreamingReport(ai, talentRows, jdRows, industry, role, city, send);
     // Save report_html to Turso (await to guarantee persistence)
     const rjson = JSON.stringify(reportHtml);
     const db = turso();
@@ -261,7 +261,7 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
 
 // ========== Report Generators (parallel, shared module) ==========
 
-async function buildStreamingReport(ai, talents, jds, industry, role, send) {
+async function buildStreamingReport(ai, talents, jds, industry, role, city, send) {
   const currentSkills = extractSkills(jds);
 
   // Both DeepSeek calls run in PARALLEL — independent data, no shared state
@@ -300,7 +300,7 @@ async function buildStreamingReport(ai, talents, jds, industry, role, send) {
   const midN = talents.filter(t => t.tier === 'mid').length;
   const lowN = talents.filter(t => t.tier === 'low').length;
 
-  return buildRedesignedReportHTML(currentSkills, trendAnalysis, tierProfiles, talents, highN, midN, lowN, industry, role, jds.length);
+  return buildRedesignedReportHTML(currentSkills, trendAnalysis, tierProfiles, talents, highN, midN, lowN, industry, role, jds.length, city);
 }
 
 
