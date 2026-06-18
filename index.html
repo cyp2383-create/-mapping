@@ -159,7 +159,7 @@ tr:hover td{background:var(--surface-hover)}
 
 <!-- ③ 猎头顾问 -->
 <div class="card" id="chatCard" style="display:none">
-  <div class="card-hd"><span class="card-hd-num">3</span>猎头顾问</div>
+  <div class="card-hd"><span class="card-hd-num">3</span>猎头顾问<span style="margin-left:auto"><button class="btn btn-ghost btn-sm" onclick="clearChat()" style="color:var(--text-muted);font-size:11px">🗑 清空对话</button></span></div>
   <div style="padding:0 24px 16px">
     <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头翻译官。</strong><br><br>我的角色是连接业务方和人才市场——你熟悉业务，我了解市场上有什么样的人。<br><br><span style="color:#f59e0b">先聊聊：你在做什么业务？想找一个什么样的人？</span></div></div>
     <div id="reportOffer" style="display:none;padding:8px 0;text-align:center"><button class="btn btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);font-size:13px" onclick="generatePersonaReport()">📋 生成人才画像报告</button><div style="font-size:11px;color:var(--text-secondary);margin-top:6px" id="reportOfferHint"></div></div>
@@ -273,6 +273,7 @@ function openChatReport(){if(currentData&&currentData.chatReport){const w=window
 function downloadChatReport(){if(!currentData||!currentData.chatReport)return;const blob=new Blob([currentData.chatReport],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='猎头顾问人才画像.html';a.click();}
 function downloadReport(){if(!currentData||!currentData.report_html)return;const blob=new Blob([currentData.report_html],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='人才地图报告.html';a.click();}
 function confirmRegen(){if(confirm('重新生成将覆盖当前报告，确定继续？'))regenerateReport();}
+function clearChat(){if(!confirm('确定要清空所有对话记录吗？此操作不可撤销。'))return;localStorage.removeItem(getChatKey());document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头翻译官。</strong><br><br>我的角色是连接业务方和人才市场——你熟悉业务，我了解市场上有什么样的人。<br><br><span style="color:#f59e0b">先聊聊：你在做什么业务？想找一个什么样的人？</span></div>';document.getElementById('dsBChat').classList.remove('done');document.getElementById('dsChatState').textContent='重新开始';document.getElementById('dsChatAct').innerHTML='';document.getElementById('reportOffer').style.display='none';}
 async function regenerateReport(){
   if(!currentData||!currentData._posId) return;
   document.getElementById('dsReportState').textContent='⟳ 重新生成中...';
