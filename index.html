@@ -53,7 +53,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'PingFang SC','Microso
 .db-b-card{flex:1;display:flex;flex-direction:column;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:8px 10px;transition:all .3s}
 .db-b-head{display:block;font-size:11px;font-weight:600;color:var(--text);margin-bottom:2px}
 .db-b-state{display:block;font-size:10px;color:var(--text-muted);margin-bottom:4px}
-.db-b-card .db-b-act{display:flex;gap:6px}
+.db-b-card .db-b-act{display:flex;gap:6px;justify-content:space-between}
 .db-b-card.active{border-color:rgba(245,158,11,.2);background:rgba(245,158,11,.04)}
 .db-b-card.done{border-color:rgba(16,185,129,.15);background:rgba(16,185,129,.04)}
 .db-b-act .btn-sm{font-size:10px;padding:2px 7px}
@@ -162,7 +162,7 @@ tr:hover td{background:var(--surface-hover)}
   <div class="card-hd"><span class="card-hd-num">3</span>猎头顾问</div>
   <div style="padding:0 24px 16px">
     <div class="chat-panel" id="chatMessages"><div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头翻译官。</strong><br><br>我的角色是连接业务方和人才市场——你熟悉业务，我了解市场上有什么样的人。<br><br><span style="color:#f59e0b">先聊聊：你在做什么业务？想找一个什么样的人？</span></div></div>
-    <div id="reportOffer" style="display:none;padding:8px 0;text-align:center"><button class="btn btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);font-size:13px" onclick="generatePersonaReport()">📋 生成人才画像报告</button><span style="font-size:11px;color:var(--text-secondary);margin-left:8px" id="reportOfferHint"></span></div>
+    <div id="reportOffer" style="display:none;padding:8px 0;text-align:center"><button class="btn btn-primary" style="background:linear-gradient(135deg,#10b981,#059669);font-size:13px" onclick="generatePersonaReport()">📋 生成人才画像报告</button><div style="font-size:11px;color:var(--text-secondary);margin-top:6px" id="reportOfferHint"></div></div>
     <div class="suggestions" id="suggestedQuestions"><span style="font-size:12px;color:var(--text-secondary);margin-right:4px">快捷回复:</span><button class="btn btn-ghost btn-sm" onclick="askQuestion('这些大厂在AI方面有什么动向？')">大厂AI动向</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('从哪家公司挖人最适合我的业务？')">挖人建议</button><button class="btn btn-ghost btn-sm" onclick="askQuestion('这个岗位需要什么核心能力？')">能力画像</button></div>
     <div class="chat-input-row"><input id="chatInput" placeholder="描述你的业务场景..." onkeydown="if(event.key==='Enter')sendChat()"><button class="btn btn-primary" style="padding:8px 16px;font-size:13px" onclick="sendChat()">发送</button></div>
   </div>
@@ -208,7 +208,7 @@ async function startGenerate(){
           else if(d.step==='enrich'){updateProgress(d.progress);updateWorkflow(2,d.text);}
           else if(d.step==='data_ready'){updateProgress(65);currentData=d;document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头翻译官。</strong><br><br>我的角色是连接业务方和人才市场——你熟悉业务，我了解市场上有什么样的人。<br><br><span style="color:#f59e0b">先聊聊：你在做什么业务？想找一个什么样的人？</span></div>';showResults(d);}
           else if(d.step==='report_progress'){updateProgress(d.progress);document.getElementById('dsReportState').textContent='⟳ '+d.text;}
-          else if(d.step==='report_ready'){updateProgress(100);if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='已完成 ✓';document.getElementById('dsReportAct').innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button>`;}
+          else if(d.step==='report_ready'){updateProgress(100);if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='已完成 ✓';document.getElementById('dsReportAct').innerHTML=`<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">🔄 重新生成</button>`;}
           else if(d.step==='error'){alert(d.text);}
           else{updateProgress(d.progress||50,d.text||'处理中...');}
         }catch(e){}
@@ -249,7 +249,7 @@ function showResults(data){
   if(data.report_html&&data.report_html.length>100){
     document.getElementById('dsBReport').classList.add('done');
     document.getElementById('dsReportState').textContent='已完成 ✓';
-    document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button>';
+    document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class='btn btn-ghost btn-sm' onclick='confirmRegen()' style='color:var(--text-secondary);margin-left:6px'>🔄 重新生成</button>';
   }
   // Populate tables
   const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
@@ -270,7 +270,9 @@ function switchTab(tab){
 }
 function openReport(){if(currentData&&currentData.report_html){const w=window.open('','_blank');w.document.write(currentData.report_html);w.document.close()}}
 function openChatReport(){if(currentData&&currentData.chatReport){const w=window.open('','_blank');w.document.write(currentData.chatReport);w.document.close()}}
+function downloadChatReport(){if(!currentData||!currentData.chatReport)return;const blob=new Blob([currentData.chatReport],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='猎头顾问人才画像.html';a.click();}
 function downloadReport(){if(!currentData||!currentData.report_html)return;const blob=new Blob([currentData.report_html],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='人才地图报告.html';a.click();}
+function confirmRegen(){if(confirm('重新生成将覆盖当前报告，确定继续？'))regenerateReport();}
 async function regenerateReport(){
   if(!currentData||!currentData._posId) return;
   const btn=document.getElementById('btnRegenReport');btn.textContent='生成中...';
@@ -280,7 +282,7 @@ async function regenerateReport(){
     while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;try{const d=JSON.parse(line.slice(6));
         if(d.step==='progress'){btn.textContent=d.text;document.getElementById('dsReportState').textContent='⟳ '+d.text;}
-        else if(d.step==='done'){btn.textContent='完成!';currentData.report_html=d.report_html;document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='✓ 已更新';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button>';}
+        else if(d.step==='done'){btn.textContent='完成!';currentData.report_html=d.report_html;document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='✓ 已更新';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class='btn btn-ghost btn-sm' onclick='confirmRegen()' style='color:var(--text-secondary);margin-left:6px'>🔄 重新生成</button>';}
         else if(d.error){btn.textContent='生成失败';}
       }catch(e){}}}
   }catch(e){btn.textContent='生成失败';}
@@ -317,12 +319,12 @@ async function generatePersonaReport(){
       for(const line of lines){if(!line.startsWith('data: '))continue;
         try{const d=JSON.parse(line.slice(6));
           if(d.step==='progress'){document.getElementById('dsChatState').textContent='💬 追问顾问 — ⟳ '+d.text;}
-          else if(d.step==='report'){report=d.answer;currentData.chatReport=d.answer;document.getElementById('dsBChat').classList.add('done');document.getElementById('dsChatState').textContent='✓ 画像已生成';document.getElementById('dsChatAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openChatReport()" style="color:#f59e0b">查看画像</button>';}
+          else if(d.step==='report'){report=d.answer;currentData.chatReport=d.answer;document.getElementById('dsBChat').classList.add('done');document.getElementById('dsChatState').textContent='✓ 画像已生成';document.getElementById('dsChatAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openChatReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadChatReport()" style="color:#10b981;margin-left:4px">下载</button>';}
           else if(d.step==='error'){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">${d.text}</div>`;saveChat();return;}
         }catch(e){}
       }
     }
-    if(report){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="max-width:95%">${report}</div>`;saveChat();}
+    if(report){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);text-align:center"><strong style="color:#10b981">✓ 人才画像已生成</strong><br><span style="font-size:12px;color:#a8a8a8">可在Agent看板或下方按钮查看</span><div style="margin-top:8px;display:flex;gap:8px;justify-content:center"><button class="btn btn-ghost btn-sm" onclick="openChatReport()" style="color:#f59e0b">📊 查看</button><button class="btn btn-ghost btn-sm" onclick="downloadChatReport()" style="color:#10b981">⬇ 下载</button></div></div>`;saveChat();}
   }catch(e){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">报告生成失败</div>`;saveChat();}
   msgs.scrollTop=msgs.scrollHeight;
 }
