@@ -349,7 +349,7 @@ async function sendChat(){
           else if(d.step==='done'){
             message=d.message||'';offerReport=d.offer_report||false;understanding=d.understanding||'';sugs=d.suggestions||[];
             document.getElementById('dsBChat').classList.add('done');
-            document.getElementById('dsChatState').textContent='✓ 已回复'+(d.remaining!==undefined?' · 剩'+d.remaining+'轮':'');
+            document.getElementById('dsChatState').textContent='✓ 已回复';
           }
           else if(d.step==='error'){msgs.innerHTML+=`<div class="chat-msg chat-bot" style="color:#ef4444">${d.text||'服务暂不可用'}</div>`;saveChat();return;}
         }catch(e){}
