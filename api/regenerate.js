@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     const highN = talentData.filter(t => t.tier === 'high').length;
     const midN = talentData.filter(t => t.tier === 'mid').length;
     const lowN = talentData.filter(t => t.tier === 'low').length;
-    const report = buildRedesignedReportHTML(currentSkills, trendAnalysis, tierProfiles, talentData, highN, midN, lowN, industry, role, jds.length);
+    const report = buildRedesignedReportHTML(currentSkills, trendAnalysis, tierProfiles, talentData, highN, midN, lowN, industry, role, jds.length, "");
 
     // Save to Turso (await to guarantee persistence before ending response)
     const rjson = JSON.stringify(report);
