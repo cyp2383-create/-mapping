@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   }
 
   if (list) {
-    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, created_at FROM positions ORDER BY created_at DESC");
+    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, chat_report, podcast_script, created_at FROM positions ORDER BY created_at DESC");
     const positions = rows.map(r => {
       const obj = {};
       cols.forEach((c,i) => { try { obj[c] = r[i]?.value; } catch {} });
@@ -34,6 +34,8 @@ export default async function handler(req, res) {
         if (raw && raw._industry) obj.industry = raw._industry;
         if (raw && raw._role) obj.role_direction = raw._role;
       } catch {}
+      try { obj.chat_report = JSON.parse(obj.chat_report || 'null'); } catch { obj.chat_report = null; }
+      try { obj.podcast_script = JSON.parse(obj.podcast_script || 'null'); } catch { obj.podcast_script = null; }
       return obj;
     });
     res.json({ positions });
@@ -41,7 +43,7 @@ export default async function handler(req, res) {
   }
 
   if (position_id) {
-    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, jd_data, report_html, created_at FROM positions WHERE id=?", [position_id]);
+    const { rows, cols } = await query("SELECT id, name, industry, role_direction, talent_data, jd_data, report_html, chat_report, podcast_script, created_at FROM positions WHERE id=?", [position_id]);
     if (!rows.length) return res.json({ talents: [], jds: [] });
     const obj = {};
     cols.forEach((c,i) => { try { obj[c] = rows[0][i]?.value; } catch {} });
@@ -80,8 +82,10 @@ export default async function handler(req, res) {
       result.tier = result.tier || 'low';
       return result;
     });
-    let report_html = '';
+    let report_html = '', chat_report = null, podcast_script = null;
     try { report_html = JSON.parse(obj.report_html || '""'); } catch {}
+    try { chat_report = JSON.parse(obj.chat_report || 'null'); } catch {}
+    try { podcast_script = JSON.parse(obj.podcast_script || 'null'); } catch {}
     // Compute derived fields so history loads with same shape as first-time generate
     const tier_stats = { high: 0, mid: 0, low: 0 };
     talents.forEach(t => {
@@ -91,7 +95,7 @@ export default async function handler(req, res) {
     });
     const companies = [...new Set(talents.map(t => t.current_company).filter(Boolean))];
     const questions = ['描述我的业务场景,帮我构建人才画像','从哪家公司挖人最适合我的业务?','这些大厂在AI方面有什么动向?'];
-    res.json({ talents, jds, industry, role, report_html, tier_stats, companies, questions });
+    res.json({ talents, jds, industry, role, report_html, chat_report, podcast_script, tier_stats, companies, questions });
     return;
   }
 
