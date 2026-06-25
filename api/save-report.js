@@ -8,6 +8,17 @@ export default async function handler(req, res) {
     const { position_id, chat_report, podcast_script } = req.body;
     if (!position_id) return res.status(400).json({ error: 'Need position_id' });
 
+    // Ensure columns exist
+    try {
+      await fetch(process.env.TURSO_URL + '/v2/pipeline', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + process.env.TURSO_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [
+          { type: 'execute', stmt: { sql: "ALTER TABLE positions ADD COLUMN chat_report TEXT" } },
+          { type: 'execute', stmt: { sql: "ALTER TABLE positions ADD COLUMN podcast_script TEXT" } }
+        ]})
+      });
+    } catch {}
+
     const updates = [];
     if (chat_report) {
       const safe = JSON.stringify(chat_report).replace(/'/g, "''");
