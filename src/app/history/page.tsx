@@ -3,9 +3,26 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Eye, Download, FileText, MessageCircle, Podcast, History } from "lucide-react";
+import { Eye, Download, FileText, MessageCircle, Podcast, History, Play, Square } from "lucide-react";
 
 const openInTab = (html: string) => { const w = window.open("", "_blank"); w?.document.write(html); w?.document.close(); };
+let podcastPlaying = false;
+const playPodcastScript = (script: string) => {
+  if (podcastPlaying) { speechSynthesis.cancel(); podcastPlaying = false; return; }
+  const lines: { host: string; text: string }[] = [];
+  script.split("\n").forEach((l: string) => { const m = l.trim().match(/【(小研|小诺)】(.*)/); if (m) lines.push({ host: m[1], text: m[2].trim() }); });
+  if (!lines.length) return;
+  let idx = 0; podcastPlaying = true;
+  const speak = () => {
+    if (!podcastPlaying || idx >= lines.length) { podcastPlaying = false; return; }
+    const l = lines[idx]; const u = new SpeechSynthesisUtterance(l.text);
+    u.lang = "zh-CN"; u.rate = l.host === "小研" ? 1.0 : 1.08; u.pitch = l.host === "小研" ? 1.15 : 1.05;
+    const voices = speechSynthesis.getVoices(); const zh = voices.filter(v => v.lang.startsWith("zh"));
+    if (zh.length >= 2) u.voice = l.host === "小研" ? (zh.find(v => v.name.includes("Xiaoxiao")) || zh[0]) : (zh.find(v => v.name.includes("Yunxi")) || zh[1]);
+    u.onend = () => { idx++; speak(); }; u.onerror = () => { idx++; speak(); };
+    speechSynthesis.speak(u);
+  }; speak();
+};
 
 export default function HistoryPage() {
   const [records, setRecords] = useState<any[]>([]);
@@ -55,11 +72,14 @@ export default function HistoryPage() {
                         <MessageCircle className="h-3 w-3 mr-1 text-emerald-400" />顾问画像
                       </Button>
                     )}
-                    {r.podcast_script && (
+                    {r.podcast_script && (<>
                       <Button variant="outline" size="sm" className="text-xs" onClick={() => openInTab(`<html><body style="background:#0d0d14;color:#d0d0d0;font:14px Inter,sans-serif;padding:24px;white-space:pre-wrap;line-height:2">${r.podcast_script}</body></html>`)}>
-                        <Podcast className="h-3 w-3 mr-1 text-violet-400" />播客
+                        <Podcast className="h-3 w-3 mr-1 text-violet-400" />剧本
                       </Button>
-                    )}
+                      <Button variant="outline" size="sm" className="text-xs" onClick={() => playPodcastScript(r.podcast_script)}>
+                        <Play className="h-3 w-3 mr-1 text-violet-400" />播放
+                      </Button>
+                    </>)}
                     {!r.report_html && !r.chat_report && !r.podcast_script && (
                       <span className="text-xs text-muted-foreground">内容生成中...</span>
                     )}
