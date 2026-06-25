@@ -155,11 +155,8 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
-      let [posId, setPosId] = useState("");
-  // After data ready, fetch latest position ID
-  useEffect(() => { if (data {!data && <p{!data && <p !posId) { fetch("/api/data?list=true").then(r=>r.json()).then(d=>{ if(d.positions?.[0]?.id) setPosId(String(d.positions[0].id)); }).catch(()=>{}); } }, [data, posId]);
 
-  {!data {!data && <p{!data && <p <p className="text-center text-sm text-muted-foreground pt-4">输入行业和岗位，点击「生成人才地图」开始搜索</p>}
+      {!data && <p className="text-center text-sm text-muted-foreground pt-4">输入行业和岗位，点击「生成人才地图」开始搜索</p>}
     </div>
   );
 }
