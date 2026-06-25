@@ -1,40 +1,48 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Database } from "lucide-react";
+import { Database, ExternalLink } from "lucide-react";
 
-export default function DatabasePage() {
+function DatabaseContent() {
+  const searchParams = useSearchParams();
+  const pid = searchParams.get("position_id");
   const [talents, setTalents] = useState<any[]>([]);
   const [jds, setJds] = useState<any[]>([]);
+  const [meta, setMeta] = useState({ name: "", industry: "", role: "" });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!pid) { setLoading(false); return; }
     (async () => {
       try {
-        const r1 = await fetch("/api/data?list=true");
-        const d1 = await r1.json();
-        const lastId = d1.positions?.[0]?.id;
-        if (lastId) {
-          const r2 = await fetch(`/api/data?position_id=${lastId}`);
-          const d2 = await r2.json();
-          setTalents(d2.talents || []);
-          setJds(d2.jds || []);
-        }
+        const r = await fetch(`/api/data?position_id=${pid}`);
+        const d = await r.json();
+        setTalents(d.talents || []);
+        setJds(d.jds || []);
+        setMeta({ name: d.name || "", industry: d.industry || "", role: d.role || d.role_direction || "" });
       } catch {} finally { setLoading(false); }
     })();
-  }, []);
+  }, [pid]);
 
   const tierColor = (t: string) => t === "high" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : t === "mid" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-violet-500/30 bg-violet-500/10 text-violet-400";
   const tierLabel = (t: string) => t === "high" ? "高" : t === "mid" ? "中" : "低";
 
+  if (!pid) return (
+    <div className="max-w-5xl mx-auto px-6 py-10"><Card><CardHeader><CardTitle className="text-sm flex items-center gap-2"><Database className="h-4 w-4 text-primary" />人才数据库</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground text-center py-8">请先搜索或从历史记录选择一个岗位查看数据</p></CardContent></Card></div>
+  );
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Database className="h-4 w-4 text-primary" />人才数据库</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><Database className="h-4 w-4 text-primary" />人才数据库</CardTitle>
+          {meta.name && <p className="text-xs text-muted-foreground">{meta.name} · {meta.industry} · {meta.role}</p>}
+        </CardHeader>
         <CardContent>
           <Tabs defaultValue="talents">
             <TabsList className="mb-4"><TabsTrigger value="talents">候选人 ({talents.length})</TabsTrigger><TabsTrigger value="jds">招聘JD ({jds.length})</TabsTrigger></TabsList>
@@ -43,7 +51,7 @@ export default function DatabasePage() {
                 <div className="overflow-auto max-h-[500px]"><Table>
                   <TableHeader><TableRow><TableHead className="text-xs">姓名</TableHead><TableHead className="text-xs">公司</TableHead><TableHead className="text-xs">职位</TableHead><TableHead className="text-xs">档位</TableHead><TableHead className="text-xs">联系</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {talents.map((t, i) => (<TableRow key={i}><TableCell className="text-xs font-medium">{t.name || "***"}</TableCell><TableCell className="text-xs">{t.current_company || ""}</TableCell><TableCell className="text-xs max-w-[180px] truncate">{t.current_title || ""}</TableCell><TableCell><Badge variant="outline" className={`text-[10px] ${tierColor(t.tier)}`}>{tierLabel(t.tier)}</Badge></TableCell><TableCell className="text-xs">{t.contact_value ? <a href={t.contact_value} target="_blank" className="text-primary hover:underline">{t.contact_type || "链接"}</a> : (t.contact_type || "—")}</TableCell></TableRow>))}
+                    {talents.map((t, i) => (<TableRow key={i}><TableCell className="text-xs font-medium">{t.name || "***"}</TableCell><TableCell className="text-xs">{t.current_company || ""}</TableCell><TableCell className="text-xs max-w-[180px] truncate">{t.current_title || ""}</TableCell><TableCell><Badge variant="outline" className={`text-[10px] ${tierColor(t.tier)}`}>{tierLabel(t.tier)}</Badge></TableCell><TableCell className="text-xs">{t.contact_value ? <a href={t.contact_value} target="_blank" className="text-primary hover:underline flex items-center gap-1">{t.contact_type || "链接"} <ExternalLink className="h-2.5 w-2.5" /></a> : (t.contact_type || "—")}</TableCell></TableRow>))}
                     {!talents.length && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">暂无数据</TableCell></TableRow>}
                   </TableBody>
                 </Table></div>}
@@ -63,4 +71,8 @@ export default function DatabasePage() {
       </Card>
     </div>
   );
+}
+
+export default function DatabasePage() {
+  return <Suspense fallback={<div className="text-center py-10 text-muted-foreground text-sm">加载中...</div>}><DatabaseContent /></Suspense>;
 }
