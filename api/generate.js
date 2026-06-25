@@ -155,12 +155,13 @@ async function generateMacroReport(ai, tavily, industry, role, city, send) {
     tier_stats:{high:highTier.length, mid:midTier.length, low:lowTier.length},
     companies:companies.slice(0,15).map(c=>c.name),
     questions:["描述我的业务场景,帮我构建人才画像","从哪家公司挖人最适合我的业务?","这些大厂在AI方面有什么动向?"],
-    stage:1, city: city||''
+    stage:1, city: city||'', position_id: positionId
   });
 
   // Await storage to guarantee the row exists before report UPDATE
+  let positionId = 0;
   try {
-    await storeResults(industry, role, talentRows, jdRows);
+    positionId = await storeResults(industry, role, talentRows, jdRows) || 0;
   } catch(e) { console.error('storeResults failed:', e.message); }
 
   // PHASE 2: Generate report
@@ -171,7 +172,9 @@ async function generateMacroReport(ai, tavily, industry, role, city, send) {
     const rjson = JSON.stringify(reportHtml);
     const db = turso();
     try {
-      const upd = await db.execute("UPDATE positions SET report_html=? WHERE id=(SELECT MAX(id) FROM positions)", [rjson]);
+      if (positionId) {
+        const upd = await db.execute("UPDATE positions SET report_html=? WHERE id=?", [rjson, positionId]);
+      }
     } catch(e) { console.error('Report save failed:', e.message); }
     send({step:'report_ready',progress:100, report_html: reportHtml});
   } catch(e) {
@@ -388,14 +391,36 @@ If field not found, use empty string. JDs:\n${text.substring(0,12000)}`;
 
 async function storeResults(industry, role, talentRows, jdRows) {
   const db = turso();
-  // Store Chinese in JSON (Turso TEXT garbles Chinese chars)
-  const tjson = JSON.stringify({_industry:industry, _role:role, _name:role+'-'+industry, data:talentRows.slice(0,40)});
-  const jjson = JSON.stringify(jdRows.slice(0,30));
-  const rjson = JSON.stringify('');
-  // Use ASCII-safe name for the direct column, full Chinese is in talent_data JSON
   const pname = (role+'-'+industry).replace(/[^\x00-\x7F]/g,'').substring(0,40)||'pos';
   const indSafe = industry.replace(/[^\x00-\x7F]/g,'').substring(0,30);
   const roleSafe = role.replace(/[^\x00-\x7F]/g,'').substring(0,30);
+
+  // Check for existing position with same name
+  const existing = await db.execute("SELECT id, talent_data, jd_data FROM positions WHERE name=?", [pname]);
+  const existingId = existing.rows?.[0]?.[0]?.value;
+
+  // Merge talent data: deduplicate by source_url
+  let mergedTalents = talentRows.slice(0, 40);
+  if (existingId) {
+    try {
+      const oldData = JSON.parse(existing.rows[0][1]?.value || '{}');
+      const oldTalents = oldData.data || [];
+      const seen = new Set(oldTalents.map(t => t.source_url).filter(Boolean));
+      const newTalents = talentRows.filter(t => !seen.has(t.source_url) || !t.source_url);
+      mergedTalents = [...oldTalents, ...newTalents].slice(0, 100);
+    } catch {}
+  }
+
+  const tjson = JSON.stringify({_industry:industry, _role:role, _name:role+'-'+industry, data:mergedTalents});
+  const jjson = JSON.stringify(jdRows.slice(0, 30));
+  const rjson = JSON.stringify('');
+
+  if (existingId) {
+    await db.execute("UPDATE positions SET talent_data=?, jd_data=?, updated_at=datetime('now') WHERE id=?",
+      [tjson, jjson, existingId]);
+    return existingId;
+  }
+
   await db.execute(
     "INSERT INTO positions (name, industry, role_direction, talent_data, jd_data, report_html) VALUES (?,?,?,?,?,?)",
     [pname, indSafe, roleSafe, tjson, jjson, rjson]
