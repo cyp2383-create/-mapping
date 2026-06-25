@@ -40,8 +40,8 @@ function DatabaseContent() {
     <div className="max-w-5xl mx-auto px-6 py-10">
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2"><Database className="h-4 w-4 text-primary" />人才数据库</CardTitle>
-          {meta.name && <p className="text-xs text-muted-foreground">{meta.name} · {meta.industry} · {meta.role}</p>}
+          <CardTitle className="text-sm flex items-center gap-2"><Database className="h-4 w-4 text-primary" />人才数据库 · {meta.industry} · {meta.role}</CardTitle>
+
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="talents">
