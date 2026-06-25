@@ -1,9 +1,66 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Database } from "lucide-react";
 
 export default function DatabasePage() {
+  const [talents, setTalents] = useState<any[]>([]);
+  const [jds, setJds] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r1 = await fetch("/api/data?list=true");
+        const d1 = await r1.json();
+        const lastId = d1.positions?.[0]?.id;
+        if (lastId) {
+          const r2 = await fetch(`/api/data?position_id=${lastId}`);
+          const d2 = await r2.json();
+          setTalents(d2.talents || []);
+          setJds(d2.jds || []);
+        }
+      } catch {} finally { setLoading(false); }
+    })();
+  }, []);
+
+  const tierColor = (t: string) => t === "high" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : t === "mid" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-violet-500/30 bg-violet-500/10 text-violet-400";
+  const tierLabel = (t: string) => t === "high" ? "高" : t === "mid" ? "中" : "低";
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
-      <Card><CardHeader><CardTitle className="text-sm">🗄 人才数据库</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">开发中...</p></CardContent></Card>
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Database className="h-4 w-4 text-primary" />人才数据库</CardTitle></CardHeader>
+        <CardContent>
+          <Tabs defaultValue="talents">
+            <TabsList className="mb-4"><TabsTrigger value="talents">候选人 ({talents.length})</TabsTrigger><TabsTrigger value="jds">招聘JD ({jds.length})</TabsTrigger></TabsList>
+            <TabsContent value="talents">
+              {loading ? <p className="text-sm text-muted-foreground text-center py-8">加载中...</p> :
+                <div className="overflow-auto max-h-[500px]"><Table>
+                  <TableHeader><TableRow><TableHead className="text-xs">姓名</TableHead><TableHead className="text-xs">公司</TableHead><TableHead className="text-xs">职位</TableHead><TableHead className="text-xs">档位</TableHead><TableHead className="text-xs">联系</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {talents.map((t, i) => (<TableRow key={i}><TableCell className="text-xs font-medium">{t.name || "***"}</TableCell><TableCell className="text-xs">{t.current_company || ""}</TableCell><TableCell className="text-xs max-w-[180px] truncate">{t.current_title || ""}</TableCell><TableCell><Badge variant="outline" className={`text-[10px] ${tierColor(t.tier)}`}>{tierLabel(t.tier)}</Badge></TableCell><TableCell className="text-xs">{t.contact_value ? <a href={t.contact_value} target="_blank" className="text-primary hover:underline">{t.contact_type || "链接"}</a> : (t.contact_type || "—")}</TableCell></TableRow>))}
+                    {!talents.length && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">暂无数据</TableCell></TableRow>}
+                  </TableBody>
+                </Table></div>}
+            </TabsContent>
+            <TabsContent value="jds">
+              {loading ? <p className="text-sm text-muted-foreground text-center py-8">加载中...</p> :
+                <div className="overflow-auto max-h-[500px]"><Table>
+                  <TableHeader><TableRow><TableHead className="text-xs">职位</TableHead><TableHead className="text-xs">公司</TableHead><TableHead className="text-xs">薪资</TableHead><TableHead className="text-xs">地点</TableHead><TableHead className="text-xs">来源</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {jds.map((j, i) => (<TableRow key={i}><TableCell className="text-xs font-medium">{j.title || ""}</TableCell><TableCell className="text-xs">{j.company || ""}</TableCell><TableCell className="text-xs">{j.salary || "—"}</TableCell><TableCell className="text-xs">{j.location || "—"}</TableCell><TableCell className="text-xs">{j.source_url ? <a href={j.source_url} target="_blank" className="text-primary hover:underline"><Badge variant="outline" className="text-[10px] border-emerald-500/30 bg-emerald-500/10 text-emerald-400">{j.source_platform || "链接"}</Badge></a> : <Badge variant="outline" className="text-[10px]">{j.source_platform || "—"}</Badge>}</TableCell></TableRow>))}
+                    {!jds.length && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">暂无数据</TableCell></TableRow>}
+                  </TableBody>
+                </Table></div>}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }

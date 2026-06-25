@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN" className="dark h-full">
+    <html lang="zh-CN" className="dark h-full" suppressHydrationWarning>
       <body className={`${inter.className} h-full bg-background text-foreground antialiased`}>
         <div className="flex h-full">
           <AppSidebar />
