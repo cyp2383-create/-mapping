@@ -3,6 +3,7 @@
   "functions": {
     "api/generate.js": { "maxDuration": 120 },
     "api/regenerate.js": { "maxDuration": 60 },
-    "api/chat.js": { "maxDuration": 30 }
+    "api/chat.js": { "maxDuration": 30 },
+    "api/podcast.js": { "maxDuration": 60 }
   }
 }
