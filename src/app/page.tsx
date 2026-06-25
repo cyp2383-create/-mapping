@@ -36,7 +36,7 @@ export default function HomePage() {
           if (!line.startsWith("data: ")) continue;
           try {
             const d = JSON.parse(line.slice(6));
-            if (d.step === "data_ready") { setData(d); setProgress(65); setStatus("数据就绪 ✓"); }
+            if (d.step === "data_ready") { setData(d); if (d.position_id && !(data as any)?._posId) { (data as any)._posId = d.position_id; try { localStorage.setItem("current_position_id", String(d.position_id)); } catch {} } setProgress(65); setStatus("数据就绪 ✓"); }
             else if (d.step === "report_ready") { setData((p: any) => ({ ...p, report_html: d.report_html })); setProgress(100); setStatus("报告生成完成 ✓"); }
             else if (d.step === "report_progress") { setProgress(Math.min(95, d.progress || progress)); setStatus("生成报告: " + (d.text || "")); }
             else if (d.progress) { setProgress(d.progress); setStatus(stepMap[d.step] || d.text || ("处理中: " + d.step)); }
@@ -63,7 +63,7 @@ export default function HomePage() {
           buf += decoder.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop() || "";
           for (const l of lines) { if (!l.startsWith("data: ")) continue; try { const d = JSON.parse(l.slice(6)); if (d.step === "done") script = d.script; else if (d.step === "progress") setPodcastStatus(d.text || ""); } catch {} }
         }
-        (data as any)._podcastScript = script; try { localStorage.setItem("talent_miner_podcast", script); fetch("/api/save-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ position_id: 0, podcast_script: script }) }).catch(() => {}); } catch {}
+        (data as any)._podcastScript = script; try { localStorage.setItem("talent_miner_podcast", script); fetch("/api/save-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ position_id: (data as any)?._posId || 0, podcast_script: script }) }).catch(() => {}); } catch {}
       }
       const script = (data as any)._podcastScript; if (!script) { setPodcasting(false); return; }
       podcastLines = []; script.split("\n").forEach((l: string) => { const m = l.trim().match(/【(小研|小诺)】(.*)/); if (m) podcastLines.push({ host: m[1], text: m[2].trim() }); });
