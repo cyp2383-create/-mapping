@@ -181,6 +181,7 @@ tr:hover td{background:var(--surface-hover)}
   <div class="card-hd">历史报告</div>
   <div style="padding:0 24px" id="historyList"><div class="empty">加载中...</div></div>
 </div>
+<div id="podcastBar" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;background:rgba(0,0,0,.9);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:var(--r);padding:10px 20px;display:flex;align-items:center;gap:12px;display:none"><span style="font-size:13px;color:var(--accent)">🎙️ 播客播放中</span><button class="btn btn-ghost btn-sm" id="btnPodcast" onclick="togglePodcast()" style="color:var(--text)">⏸️ 暂停播客</button><button class="btn btn-ghost btn-sm" onclick="stopPodcast()" style="color:var(--text-secondary)">⏹ 停止</button></div>
 <div class="footer">Tavily · LinkedIn · GitHub · DeepSeek · Powered by AI<span style="margin-left:12px;color:var(--text-muted)">※ 候选人与JD数据由Tavily API实时搜索，单次上限约16位候选人/24条JD</span></div>
 </div>
 
@@ -208,7 +209,7 @@ async function startGenerate(){
           else if(d.step==='enrich'){updateProgress(d.progress);updateWorkflow(2,d.text);}
           else if(d.step==='data_ready'){updateProgress(65);currentData=d;currentData.industry=document.getElementById('industry').value.trim();currentData.role=document.getElementById('role').value.trim();currentData.city=document.getElementById('city').value.trim();document.getElementById('chatMessages').innerHTML='<div class="chat-msg chat-bot"><strong>👋 你好，我是你的猎头翻译官。</strong><br><br>我的角色是连接业务方和人才市场——你熟悉业务，我了解市场上有什么样的人。<br><br><span style="color:#f59e0b">先聊聊：你在做什么业务？想找一个什么样的人？</span></div>';showResults(d);}
           else if(d.step==='report_progress'){updateProgress(d.progress);document.getElementById('dsReportState').textContent='⟳ '+d.text;}
-          else if(d.step==='report_ready'){updateProgress(100);if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='已完成 ✓';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">重新生成</button>';}
+          else if(d.step==='report_ready'){updateProgress(100);if(currentData)currentData.report_html=d.report_html;showResults(currentData);document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='已完成 ✓';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">重新生成</button><button class="btn btn-ghost btn-sm" id="btnPodcast" onclick="togglePodcast()" style="color:#f59e0b">🎙️ 播客</button>';}
           else if(d.step==='error'){alert(d.text);}
           else{updateProgress(d.progress||50,d.text||'处理中...');}
         }catch(e){}
@@ -249,7 +250,7 @@ function showResults(data){
   if(data.report_html&&data.report_html.length>100){
     document.getElementById('dsBReport').classList.add('done');
     document.getElementById('dsReportState').textContent='已完成 ✓';
-    document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">🔄 重新生成</button>';
+    document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">🔄 重新生成</button><button class="btn btn-ghost btn-sm" id="btnPodcast" onclick="togglePodcast()" style="color:#f59e0b">🎙️ 播客</button>';
   }
   // Populate tables
   const tbody=document.querySelector('#talentTable tbody');tbody.innerHTML='';
@@ -283,12 +284,46 @@ async function regenerateReport(){
     while(true){const{value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split('\n');buffer=lines.pop()||'';
       for(const line of lines){if(!line.startsWith('data: '))continue;try{const d=JSON.parse(line.slice(6));
         if(d.step==='progress'){document.getElementById('dsReportState').textContent='⟳ '+d.text;}
-        else if(d.step==='done'){currentData.report_html=d.report_html;document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='✓ 已更新';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">重新生成</button>';}
+        else if(d.step==='done'){currentData.report_html=d.report_html;document.getElementById('dsBReport').classList.add('done');document.getElementById('dsReportState').textContent='✓ 已更新';document.getElementById('dsReportAct').innerHTML='<button class="btn btn-ghost btn-sm" onclick="openReport()" style="color:#f59e0b">查看</button><button class="btn btn-ghost btn-sm" onclick="downloadReport()" style="color:#10b981;margin-left:6px">下载</button><button class="btn btn-ghost btn-sm" onclick="confirmRegen()" style="color:var(--text-secondary);margin-left:6px">重新生成</button><button class="btn btn-ghost btn-sm" id="btnPodcast" onclick="togglePodcast()" style="color:#f59e0b">🎙️ 播客</button>';}
         else if(d.error){document.getElementById('dsReportState').textContent='生成失败';}
       }catch(e){}}}
   }catch(e){document.getElementById('dsReportState').textContent='生成失败';}
 }
 function askQuestion(q){document.getElementById('chatInput').value=q;switchTab('chat');sendChat()}
+
+// ===== Podcast Player =====
+let podcastLines=[],podcastIdx=0,podcastPlaying=false;
+async function togglePodcast(){
+  const bar=document.getElementById('podcastBar'),btn=document.getElementById('btnPodcast');
+  if(podcastPlaying){speechSynthesis.cancel();podcastPlaying=false;btn.textContent='🎙️ 播客';bar.style.display='none';return;}
+  // Get or generate script
+  if(!currentData||!currentData.report_html)return;
+  bar.style.display='flex';btn.textContent='⏳ 生成剧本...';
+  try{
+    if(!currentData._podcastScript){
+      const resp=await fetch('/api/podcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({report_html:currentData.report_html,industry:currentData.industry||'',role:currentData.role||''})});
+      const reader=resp.body.getReader();const decoder=new TextDecoder();let buf='',script='';
+      while(true){const{value,done}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop()||'';for(const l of lines){if(!l.startsWith('data: '))continue;try{const d=JSON.parse(l.slice(6));if(d.step==='progress')btn.textContent='⏳ '+d.text;else if(d.step==='done')script=d.script;else if(d.step==='error'){btn.textContent='🎙️ 播客';bar.style.display='none';return;}}catch(e){}}}
+      currentData._podcastScript=script;
+    }
+    const script=currentData._podcastScript;if(!script){btn.textContent='🎙️ 播客';bar.style.display='none';return;}
+    // Parse lines
+    podcastLines=[];script.split('\n').forEach(l=>{const m=l.trim().match(/【(小研|小诺)】(.*)/);if(m)podcastLines.push({host:m[1],text:m[2].trim()});});
+    if(!podcastLines.length){btn.textContent='🎙️ 播客';bar.style.display='none';return;}
+    // Start playback with two voices
+    podcastIdx=0;podcastPlaying=true;btn.textContent='⏸️ 暂停';speakPodcastLine();
+  }catch(e){btn.textContent='🎙️ 播客';bar.style.display='none';}
+}
+function speakPodcastLine(){
+  if(!podcastPlaying||podcastIdx>=podcastLines.length){podcastPlaying=false;document.getElementById('btnPodcast').textContent='🎙️ 播客';document.getElementById('podcastBar').style.display='none';return;}
+  const l=podcastLines[podcastIdx];const u=new SpeechSynthesisUtterance(l.text);
+  u.lang='zh-CN';u.rate=l.host==='小研'?1.0:1.08;u.pitch=l.host==='小研'?1.15:1.05;
+  // Try to pick different voices
+  const voices=speechSynthesis.getVoices();const zh=voices.filter(v=>v.lang.startsWith('zh'));if(zh.length>=2){u.voice=l.host==='小研'?zh.find(v=>v.name.includes('Female')||v.name.includes('Xiaoxiao'))||zh[0]:zh.find(v=>v.name.includes('Male')||v.name.includes('Yunxi'))||zh[1]||zh[0];}
+  u.onend=()=>{podcastIdx++;speakPodcastLine();};u.onerror=()=>{podcastIdx++;speakPodcastLine();};
+  speechSynthesis.speak(u);document.getElementById('podcastBar').querySelector('span').textContent='🎙️ '+l.host+'讲述中';
+}
+function stopPodcast(){speechSynthesis.cancel();podcastPlaying=false;document.getElementById('btnPodcast').textContent='🎙️ 播客';document.getElementById('podcastBar').style.display='none';}
 function getChatKey(){return 'chat_'+((currentData&&currentData._posId)||'default');}
 function getReportKey(){return 'chatreport_'+((currentData&&currentData._posId)||'default');}
 function saveChat(){try{localStorage.setItem(getChatKey(),document.getElementById('chatMessages').innerHTML);if(currentData&&currentData.chatReport)localStorage.setItem(getReportKey(),currentData.chatReport);}catch(e){}}
