@@ -63,7 +63,7 @@ export default function HomePage() {
           buf += decoder.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop() || "";
           for (const l of lines) { if (!l.startsWith("data: ")) continue; try { const d = JSON.parse(l.slice(6)); if (d.step === "done") script = d.script; else if (d.step === "progress") setPodcastStatus(d.text || ""); } catch {} }
         }
-        (data as any)._podcastScript = script;
+        (data as any)._podcastScript = script; try { localStorage.setItem("talent_miner_podcast", script); } catch {}
       }
       const script = (data as any)._podcastScript; if (!script) { setPodcasting(false); return; }
       podcastLines = []; script.split("\n").forEach((l: string) => { const m = l.trim().match(/【(小研|小诺)】(.*)/); if (m) podcastLines.push({ host: m[1], text: m[2].trim() }); });

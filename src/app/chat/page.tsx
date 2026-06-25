@@ -74,7 +74,7 @@ export default function ChatPage() {
       if (report) {
         setMessages(prev => [...prev, { role: "bot", content: '<div class="text-center p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5"><p class="text-emerald-400 font-semibold text-sm">✓ 人才画像已生成</p><div class="flex gap-2 justify-center mt-2"><button class="px-3 py-1 rounded-lg border border-border text-xs hover:bg-muted" onclick="window.open().document.write("' + encodeURIComponent(report) + '")">查看</button><button class="px-3 py-1 rounded-lg border border-border text-xs hover:bg-muted" onclick="this.download()">下载</button></div></div>' }]);
         // Store for download
-        (window as any).__chatReport = report;
+        (window as any).__chatReport = report; try { localStorage.setItem("talent_miner_chat_report", report); } catch {}
       }
     } catch { setMessages(prev => [...prev, { role: "bot", content: "报告生成失败" }]); }
     setLoading(false);

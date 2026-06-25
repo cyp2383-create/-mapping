@@ -11,7 +11,7 @@ const navItems = [
   { href: "/", label: "需求配置", icon: "📋" },
   { href: "/chat", label: "猎头顾问", icon: "💬" },
   { href: "/database", label: "人才数据库", icon: "🗄" },
-  { href: "/history", label: "历史报告", icon: "📜" },
+  { href: "/history", label: "历史记录", icon: "📜" },
 ];
 
 export function AppSidebar() {
