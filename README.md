@@ -35,6 +35,24 @@ HR 跟业务方沟通"这个人要不要挖"时，往往只有感觉没有数据
 
 ---
 
+---
+
+## 两个版本
+
+| | 经典版 | Next.js 重构版 |
+|------|--------|---------------|
+| 地址 | [talent-miner.vercel.app](https://talent-miner.vercel.app) | [talent-miner-next.vercel.app](https://talent-miner-next.vercel.app) |
+| 技术栈 | 单文件 HTML + CSS + JS | Next.js 14 + TypeScript + Tailwind + shadcn/ui |
+| API | Vercel Serverless（Node.js） | 同上（代理到经典版） |
+| 数据库 | Turso（libsql） | 同上 |
+| 设计 | 暗色主题 · 毛玻璃 | Tailwind 暗色 · 组件化 |
+| 结构 | 4 模块纵向堆叠 | Sidebar 导航 + 独立路由 |
+| 适合 | 快速原型、轻量部署 | 持续迭代、团队开发 |
+
+两版共享同一套后端 API 和 Turso 数据库，数据互通。
+
+---
+
 ## 适用人群
 
 | 角色 | 使用场景 |
