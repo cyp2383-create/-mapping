@@ -312,9 +312,9 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.03)_1px,transparent_1px)] bg-[size:72px_72px] [mask-image:linear-gradient(to_bottom,black,transparent_75%)]" />
       </div>
 
-      <section className="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[1.05fr_.95fr]">
-        <div className="space-y-6">
-          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-8">
+      <section className="mx-auto grid max-w-7xl grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,.95fr)]">
+        <div className="contents">
+          <div className="order-1 flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.035] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-8">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
               <Sparkles className="h-3.5 w-3.5" />
               Market Talent Intelligence
@@ -367,7 +367,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="order-3 grid gap-4 md:grid-cols-4 xl:grid-cols-4">
             {metrics.map((metric) => (
               <div key={metric.label} className="rounded-lg border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl">
                 <p className="text-xs text-slate-400">{metric.label}</p>
@@ -377,7 +377,7 @@ export default function HomePage() {
             ))}
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
+          <div className="order-5 rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Agent Pipeline</p>
@@ -408,8 +408,8 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="rounded-lg border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+        <div className="contents">
+          <div className="order-2 flex h-full min-h-[460px] flex-col rounded-lg border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:min-h-[520px] xl:min-h-0">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Talent Heat Map</p>
@@ -417,7 +417,7 @@ export default function HomePage() {
               </div>
               <div className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">Live</div>
             </div>
-            <div className="relative min-h-[320px] overflow-hidden rounded-lg border border-white/10 bg-[radial-gradient(circle_at_60%_45%,rgba(103,232,249,.16),transparent_32%),linear-gradient(135deg,rgba(59,130,246,.12),transparent)]">
+            <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-white/10 bg-[radial-gradient(circle_at_60%_45%,rgba(103,232,249,.16),transparent_32%),linear-gradient(135deg,rgba(59,130,246,.12),transparent)]">
               <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:34px_34px] [transform:perspective(600px)_rotateX(58deg)_translateY(70px)_scale(1.35)] [transform-origin:center_bottom]" />
               <Radar className="absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 animate-spin text-cyan-200/20 [animation-duration:5s]" />
               {[
@@ -434,12 +434,12 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="order-4 grid gap-4 sm:grid-cols-2">
             <InfoCard icon={<Target className="h-4 w-4" />} label="目标公司池" value={`${companies.length} 家`} desc={companies.slice(0, 4).join(" / ")} />
             <InfoCard icon={<Users className="h-4 w-4" />} label="候选人信号" value={`${talents.length} 条`} desc="按能力标签与公司来源排序" />
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
+          <div className="order-6 rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Candidate Radar</p>
@@ -461,7 +461,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
+          <div className="order-7 rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl xl:col-span-2">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Result Report</p>
