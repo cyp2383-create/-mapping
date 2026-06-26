@@ -16,20 +16,25 @@ export default async function handler(req, res) {
       const talentData = row[2]?.value || '{}';
 
       // Check if name is garbled (contains replacement characters or only ASCII when it shouldn't)
-      if (currentName.includes('�') || /^[\x00-\x7F]+$/.test(currentName)) {
-        try {
-          const parsed = JSON.parse(talentData);
-          const realName = parsed._name || '';
-          if (realName && realName !== currentName) {
-            const safe = realName.replace(/'/g, "''");
-            await fetch(process.env.TURSO_URL + '/v2/pipeline', {
-              method: 'POST', headers: { 'Authorization': 'Bearer ' + process.env.TURSO_TOKEN, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql: `UPDATE positions SET name='${safe}' WHERE id=${id}` } }] })
-            });
-            fixed++;
-          }
-        } catch {}
-      }
+      try {
+        const parsed = JSON.parse(talentData);
+        const realName = parsed._name || '';
+        const realIndustry = parsed._industry || '';
+        const realRole = parsed._role || '';
+        const updates = [];
+        if (realName && (currentName.includes('�') || /^[\x00-\x7F]+$/.test(currentName)) && realName !== currentName) {
+          updates.push(`name='${realName.replace(/'/g, "''")}'`);
+        }
+        if (realIndustry) updates.push(`industry='${realIndustry.replace(/'/g, "''")}'`);
+        if (realRole) updates.push(`role_direction='${realRole.replace(/'/g, "''")}'`);
+        if (updates.length) {
+          await fetch(process.env.TURSO_URL + '/v2/pipeline', {
+            method: 'POST', headers: { 'Authorization': 'Bearer ' + process.env.TURSO_TOKEN, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql: `UPDATE positions SET ${updates.join(', ')} WHERE id=${id}` } }] })
+          });
+          fixed++;
+        }
+      } catch {}
     }
     res.json({ fixed, total: rows.length });
   } catch(e) { res.status(500).json({ error: e.message }); }
