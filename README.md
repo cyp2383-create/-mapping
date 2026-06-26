@@ -2,7 +2,7 @@
 
 根据输入的行业+岗位，**全自动搜索市场数据**并生成结构化的人才画像报告。帮助招聘负责人、HRBP 和猎头顾问快速摸清人才市场格局，精准定位挖猎目标。
 
-🔗 在线体验: [talent-miner.vercel.app](https://talent-miner.vercel.app)
+🔗 在线体验: [talent-miner.vercel.app](https://talent-miner.vercel.app) (经典版) | [talent-miner-next.vercel.app](https://talent-miner-next.vercel.app) (Next.js重构版)
 
 ---
 
