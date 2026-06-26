@@ -221,7 +221,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
   const handleGenerate = async () => {
     setRunning(true);
     setProgress(3);
-    setData(null);
+    setData((prev) => (prev ? { ...prev, _loadedFromTurso: false, _hasReport: false, report_html: "" } : null));
     setStatus("正在连接 Agent 引擎...");
 
     try {
@@ -258,7 +258,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
               setProgress(65);
               setStatus(`真实证据已入库：${event.talents?.length || 0} 位候选人，${event.jds?.length || 0} 条招聘/市场信号。`);
             } else if (event.step === "report_ready") {
-              updateData({ report_html: event.report_html });
+              updateData({ report_html: event.report_html, _hasReport: Boolean(event.report_html) });
               setProgress(100);
               setStatus("人才地图报告已生成，可以查看、下载或生成播客。");
             } else if (event.step === "report_progress") {
@@ -430,8 +430,8 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
     <div className="relative min-h-full overflow-hidden bg-[linear-gradient(135deg,rgba(15,23,42,.96),rgba(2,6,23,.98)_48%,rgba(20,36,32,.96))] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 -z-0 bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.03)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]" />
 
-      <section className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(420px,.92fr)]">
-        <div className="flex flex-col gap-6">
+      <section className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(420px,.92fr)]">
+        <div className="flex min-w-0 flex-col gap-6">
           <div className="rounded-lg border border-white/10 bg-white/[0.035] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-8">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
               <Sparkles className="h-3.5 w-3.5" />
@@ -495,7 +495,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             ))}
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
+          <div className="min-h-[405px] rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Agent Pipeline</p>
@@ -525,52 +525,10 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Candidate Evidence</p>
-                <h2 className="mt-1 text-xl font-bold text-white">候选人线索</h2>
-              </div>
-              <Users className="h-5 w-5 text-cyan-200" />
-            </div>
-            {talents.length ? (
-              <div className="overflow-x-auto">
-                <div className="min-w-[620px] space-y-2">
-                  {talents.slice(0, 6).map((talent, index) => {
-                    const tier = normalizeTier(talent.tier);
-                    return (
-                      <div key={`${talent.name || "talent"}-${index}`} className="grid grid-cols-[42px_minmax(180px,1fr)_minmax(180px,1.2fr)_110px_80px] items-center gap-3 rounded-lg border border-white/10 bg-black/15 px-3 py-3">
-                        <span className="font-mono text-xs text-slate-500">{String(index + 1).padStart(2, "0")}</span>
-                        <div className="min-w-0">
-                          <strong className="block truncate text-sm text-white">{cleanText(talent.name, "候选人线索")}</strong>
-                          <p className="truncate text-xs text-slate-400">{cleanText(talent.location, "地点未标注")}</p>
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-slate-200">{cleanText(talent.current_company || talent.company, "公司未标注")}</p>
-                          <p className="truncate text-xs text-slate-500">{cleanText(talent.current_title || talent.title, "职位未标注")}</p>
-                        </div>
-                        <span className={`w-fit rounded-full border px-2 py-1 text-xs font-bold ${tierCopy[tier].tone}`}>{tierCopy[tier].label}</span>
-                        {talent.source_url ? (
-                          <a href={talent.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-100 hover:text-cyan-50">
-                            来源
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-slate-500">无链接</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <EmptyState text="还没有候选人数据。生成后这里会展示 Turso talents 数组中的真实线索。" />
-            )}
-          </div>
         </div>
 
-        <div className="flex flex-col gap-6">
-          <div className="flex min-h-[520px] flex-col rounded-lg border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className="flex min-h-[520px] flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-950/70 p-5 shadow-2xl shadow-black/40 backdrop-blur-2xl xl:h-[520px]">
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Evidence Board</p>
@@ -581,7 +539,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
               </div>
             </div>
 
-            <div className="space-y-5">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
               <div className="rounded-lg border border-white/10 bg-black/20 p-4">
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-200" />
@@ -633,7 +591,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             <InfoCard icon={<BarChart3 className="h-4 w-4" />} label="证据规模" value={hasEvidence ? `${talents.length + jds.length} 条` : "--"} desc="候选人线索 + 招聘/市场信号" />
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
+          <div className="flex min-h-[360px] flex-col rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl xl:h-[360px]">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">JD Signals</p>
@@ -642,7 +600,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
               <BriefcaseBusiness className="h-5 w-5 text-cyan-200" />
             </div>
             {jds.length ? (
-              <div className="space-y-3">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                 {jds.slice(0, 4).map((jd, index) => (
                   <div key={`${jd.title || "jd"}-${index}`} className="rounded-lg border border-white/10 bg-black/15 p-3">
                     <div className="flex items-start justify-between gap-3">
@@ -666,8 +624,52 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
               <EmptyState text="还没有 JD/网页信号。生成后这里会展示 jds 数组中的标题、公司、来源和摘要。" />
             )}
           </div>
+        </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
+        <div className="min-h-[430px] rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl xl:col-span-2">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Candidate Evidence</p>
+              <h2 className="mt-1 text-xl font-bold text-white">候选人线索</h2>
+            </div>
+            <Users className="h-5 w-5 text-cyan-200" />
+          </div>
+          {talents.length ? (
+            <div className="overflow-x-auto">
+              <div className="min-w-[760px] space-y-2">
+                {talents.slice(0, 6).map((talent, index) => {
+                  const tier = normalizeTier(talent.tier);
+                  return (
+                    <div key={`${talent.name || "talent"}-${index}`} className="grid grid-cols-[42px_minmax(180px,1fr)_minmax(220px,1.35fr)_110px_80px] items-center gap-3 rounded-lg border border-white/10 bg-black/15 px-3 py-3">
+                      <span className="font-mono text-xs text-slate-500">{String(index + 1).padStart(2, "0")}</span>
+                      <div className="min-w-0">
+                        <strong className="block truncate text-sm text-white">{cleanText(talent.name, "候选人线索")}</strong>
+                        <p className="truncate text-xs text-slate-400">{cleanText(talent.location, "地点未标注")}</p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-slate-200">{cleanText(talent.current_company || talent.company, "公司未标注")}</p>
+                        <p className="truncate text-xs text-slate-500">{cleanText(talent.current_title || talent.title, "职位未标注")}</p>
+                      </div>
+                      <span className={`w-fit rounded-full border px-2 py-1 text-xs font-bold ${tierCopy[tier].tone}`}>{tierCopy[tier].label}</span>
+                      {talent.source_url ? (
+                        <a href={talent.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-100 hover:text-cyan-50">
+                          来源
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-500">无链接</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <EmptyState text="还没有候选人数据。生成后这里会展示 Turso talents 数组中的真实线索。" />
+          )}
+        </div>
+
+        <div className="min-h-[250px] rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl xl:col-span-2">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Result Report</p>
@@ -713,7 +715,6 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-        </div>
       </section>
     </div>
   );
