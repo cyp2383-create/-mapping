@@ -9,6 +9,36 @@ const CHAT_KEY = "talent_miner_chat_v3";
 
 type Recommendation = { name: string; reason: string };
 type Message = { role: "user" | "bot"; content: string; recs?: Recommendation[] };
+type Talent = {
+  name?: string;
+  current_company?: string;
+  current_title?: string;
+  location?: string;
+  level?: string;
+  tier?: string;
+  source_platform?: string;
+  source_url?: string;
+};
+type JobDemand = {
+  title?: string;
+  company?: string;
+  snippet?: string;
+  salary?: string;
+  experience?: string;
+  source_platform?: string;
+  source_url?: string;
+};
+type MarketContext = {
+  position_id?: string | number;
+  industry?: string;
+  role?: string;
+  talents: Talent[];
+  jds: JobDemand[];
+  companies: string[];
+  questions: string[];
+  tier_stats?: Record<string, number>;
+  report_html?: string;
+};
 
 const defaultMessages: Message[] = [
   {
@@ -25,22 +55,22 @@ const defaultSuggestions = [
 ];
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>(() => {
-    if (typeof window === "undefined") return defaultMessages;
-    try {
-      const saved = localStorage.getItem(CHAT_KEY);
-      return saved ? JSON.parse(saved) : defaultMessages;
-    } catch {
-      return defaultMessages;
-    }
-  });
+  const [messages, setMessages] = useState<Message[]>(defaultMessages);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingContext, setLoadingContext] = useState(true);
   const [offerReport, setOfferReport] = useState(false);
   const [understanding, setUnderstanding] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>(defaultSuggestions);
   const [reportHtml, setReportHtml] = useState("");
+  const [marketContext, setMarketContext] = useState<MarketContext | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const contextKey = useMemo(() => {
+    const id = marketContext?.position_id;
+    if (id) return `${CHAT_KEY}:${id}`;
+    return `${CHAT_KEY}:default`;
+  }, [marketContext?.position_id]);
 
   const compactHistory = useMemo(
     () =>
@@ -53,15 +83,109 @@ export default function ChatPage() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
+      localStorage.setItem(contextKey, JSON.stringify(messages));
     } catch {}
-  }, [messages]);
+  }, [contextKey, messages]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMarketContext() {
+      setLoadingContext(true);
+      try {
+        const params = new URLSearchParams(window.location.search);
+        let positionId = params.get("position_id") || localStorage.getItem("current_position_id") || "";
+
+        if (!positionId) {
+          const latestResp = await fetch("/api/data?latest=true", { cache: "no-store" });
+          const latest = await latestResp.json();
+          positionId = latest?.position?.id ? String(latest.position.id) : "";
+        }
+
+        if (!positionId) throw new Error("No position id");
+
+        const detailResp = await fetch(`/api/data?position_id=${positionId}`, { cache: "no-store" });
+        if (!detailResp.ok) throw new Error("Context request failed");
+        const detail = await detailResp.json();
+
+        const nextContext: MarketContext = {
+          position_id: positionId,
+          industry: detail.industry,
+          role: detail.role,
+          talents: detail.talents || [],
+          jds: detail.jds || [],
+          companies: detail.companies || [],
+          questions: detail.questions || [],
+          tier_stats: detail.tier_stats,
+          report_html: detail.report_html || "",
+        };
+
+        if (cancelled) return;
+        setMarketContext(nextContext);
+        setReportHtml(localStorage.getItem(`talent_miner_chat_report:${positionId}`) || "");
+        setSuggestions(buildSuggestions(nextContext));
+
+        const scopedKey = `${CHAT_KEY}:${positionId}`;
+        const saved = localStorage.getItem(scopedKey);
+        setMessages(saved ? JSON.parse(saved) : buildDefaultMessages(nextContext));
+      } catch {
+        if (cancelled) return;
+        setMarketContext(null);
+        setMessages(defaultMessages);
+        setSuggestions(defaultSuggestions);
+      } finally {
+        if (!cancelled) setLoadingContext(false);
+      }
+    }
+
+    loadMarketContext();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
   const append = (message: Message) => setMessages((prev) => [...prev, message]);
+
+  const buildChatContext = () => {
+    const userScenario = compactHistory
+      .filter((item) => item.role === "user")
+      .map((item) => item.content)
+      .join("\n")
+      .slice(-1800);
+    const reportSummary = stripHtml(marketContext?.report_html || "").slice(0, 1800);
+    const contextFrame = {
+      role: "assistant",
+      content: [
+        `当前顾问只服务这一张市场地图：${marketContext?.industry || "未知行业"} · ${marketContext?.role || "未知岗位"}`,
+        `搜索数据：${marketContext?.talents.length || 0} 位候选人，${marketContext?.jds.length || 0} 条市场/JD 信号，${marketContext?.companies.length || 0} 家公司。`,
+        `公司池：${(marketContext?.companies || []).slice(0, 8).join(" / ") || "暂无"}`,
+        `智能追问：${(marketContext?.questions || []).slice(0, 4).join(" / ") || "暂无"}`,
+        reportSummary ? `市场地图报告摘要：${reportSummary}` : "",
+        userScenario ? `用户已补充的具体业务场景：${userScenario}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    };
+
+    return {
+      history: [contextFrame, ...compactHistory].slice(-21),
+      position_id: marketContext?.position_id,
+      industry: marketContext?.industry,
+      role: marketContext?.role,
+      talents: marketContext?.talents || [],
+      jds: marketContext?.jds || [],
+      companies: marketContext?.companies || [],
+      tier_stats: marketContext?.tier_stats,
+      questions: marketContext?.questions || [],
+      report_html: marketContext?.report_html || "",
+      report_summary: reportSummary,
+      business_scenario: userScenario,
+    };
+  };
 
   const send = async (question: string) => {
     const q = question.trim();
@@ -76,7 +200,7 @@ export default function ChatPage() {
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, context: { history: compactHistory, talents: [], jds: [] } }),
+        body: JSON.stringify({ question: q, context: buildChatContext() }),
       });
 
       if (!resp.ok) throw new Error(`Chat failed: ${resp.status}`);
@@ -121,7 +245,7 @@ export default function ChatPage() {
       });
       setOfferReport(offer);
       setUnderstanding(understood);
-      if (nextSuggestions.length) setSuggestions(nextSuggestions);
+      setSuggestions(mergeSuggestions(nextSuggestions, buildSuggestions(marketContext)));
     } catch {
       append({ role: "bot", content: "服务暂时不可用。请确认旧 API 服务可访问后再试。" });
     } finally {
@@ -140,7 +264,7 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: "生成人才画像报告",
-          context: { history: compactHistory, talents: [], jds: [] },
+          context: buildChatContext(),
           action: "generate",
         }),
       });
@@ -174,8 +298,8 @@ export default function ChatPage() {
 
       if (report) {
         setReportHtml(report);
-        localStorage.setItem("talent_miner_chat_report", report);
-        const pid = Number(localStorage.getItem("current_position_id") || "0");
+        const pid = Number(marketContext?.position_id || localStorage.getItem("current_position_id") || "0");
+        localStorage.setItem(`talent_miner_chat_report:${pid || "default"}`, report);
         fetch("/api/save-report", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -193,7 +317,8 @@ export default function ChatPage() {
   };
 
   const openReport = () => {
-    const html = reportHtml || localStorage.getItem("talent_miner_chat_report") || "";
+    const scopedKey = `talent_miner_chat_report:${marketContext?.position_id || "default"}`;
+    const html = reportHtml || localStorage.getItem(scopedKey) || "";
     if (!html) return;
     const win = window.open("", "_blank");
     win?.document.write(html);
@@ -202,11 +327,11 @@ export default function ChatPage() {
 
   const clearChat = () => {
     if (!confirm("确定清空所有对话记录吗？")) return;
-    localStorage.removeItem(CHAT_KEY);
-    setMessages(defaultMessages);
+    localStorage.removeItem(contextKey);
+    setMessages(buildDefaultMessages(marketContext));
     setOfferReport(false);
     setUnderstanding("");
-    setSuggestions(defaultSuggestions);
+    setSuggestions(buildSuggestions(marketContext));
     setReportHtml("");
   };
 
@@ -225,8 +350,11 @@ export default function ChatPage() {
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">AI Copilot</p>
               <h1 className="mt-1 flex items-center gap-2 text-2xl font-black text-white">
                 <Sparkles className="h-5 w-5 text-cyan-200" />
-                市场人才地图顾问
+                {marketContext?.industry && marketContext?.role ? `${marketContext.industry} · ${marketContext.role} 顾问` : "市场人才地图顾问"}
               </h1>
+              <p className="mt-2 text-sm text-slate-400">
+                {loadingContext ? "正在载入当前市场地图上下文..." : "围绕当前行业-岗位、搜索数据、报告和你的业务场景连续追问。"}
+              </p>
             </div>
             <Button variant="outline" size="sm" onClick={clearChat} className="gap-2 border-white/10 text-slate-300">
               <Trash2 className="h-3.5 w-3.5" />
@@ -266,7 +394,7 @@ export default function ChatPage() {
               </div>
             )}
 
-            {(reportHtml || (typeof window !== "undefined" && localStorage.getItem("talent_miner_chat_report"))) && (
+            {(reportHtml || (typeof window !== "undefined" && localStorage.getItem(`talent_miner_chat_report:${marketContext?.position_id || "default"}`))) && (
               <div className="mb-4 flex items-center justify-between rounded-lg border border-cyan-300/20 bg-cyan-300/8 p-3 text-sm text-cyan-100">
                 <span>已有一份对话生成的人才画像报告。</span>
                 <Button variant="outline" size="sm" onClick={openReport} className="border-cyan-300/20">
@@ -313,21 +441,32 @@ export default function ChatPage() {
         <aside className="space-y-4">
           <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Context</p>
-            <h2 className="mt-1 text-xl font-bold text-white">顾问能做什么</h2>
+            <h2 className="mt-1 text-xl font-bold text-white">当前服务对象</h2>
             <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <p>1. 把一句招聘需求拆成行业、岗位能力、目标公司和候选人来源。</p>
-              <p>2. 基于已有搜索结果继续追问，补齐候选人画像与招聘优先级。</p>
-              <p>3. 在信息足够时生成可汇报的人才画像报告。</p>
+              <p>
+                <span className="text-slate-500">行业：</span>
+                <span className="text-white">{marketContext?.industry || "未载入"}</span>
+              </p>
+              <p>
+                <span className="text-slate-500">岗位：</span>
+                <span className="text-white">{marketContext?.role || "未载入"}</span>
+              </p>
+              <p>
+                <span className="text-slate-500">上下文：</span>
+                {marketContext ? `${marketContext.talents.length} 位候选人 / ${marketContext.jds.length} 条市场信号 / ${marketContext.companies.length} 家公司` : "等待市场地图数据"}
+              </p>
+              <div className="rounded-lg border border-cyan-300/15 bg-cyan-300/8 p-3 text-xs leading-6 text-cyan-50/80">
+                顾问会统一使用市场地图报告、搜索数据、当前对话里的业务场景和下方追问问题，不会脱离这个行业-岗位单独回答。
+              </div>
             </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Signal</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Unified Follow-ups</p>
             <div className="mt-4 grid gap-3">
-              {["公司来源", "能力标签", "招聘动机", "触达优先级"].map((item, index) => (
-                <div key={item} className="flex items-center justify-between rounded-lg border border-white/10 bg-black/15 p-3">
-                  <span className="text-sm text-slate-300">{item}</span>
-                  <span className="font-mono text-xs text-cyan-200">{[92, 86, 78, 84][index]}%</span>
-                </div>
+              {suggestions.slice(0, 4).map((item) => (
+                <button key={item} onClick={() => send(item)} disabled={loading} className="rounded-lg border border-white/10 bg-black/15 p-3 text-left text-sm text-slate-300 transition hover:border-cyan-300/40 hover:text-white disabled:opacity-50">
+                  {item}
+                </button>
               ))}
             </div>
           </div>
@@ -361,6 +500,36 @@ function ChatBubble({ message }: { message: Message }) {
       </div>
     </div>
   );
+}
+
+function buildDefaultMessages(context: MarketContext | null): Message[] {
+  if (!context?.industry || !context?.role) return defaultMessages;
+  return [
+    {
+      role: "bot",
+      content: `你好，我是服务于 <span style="color:#67e8f9;font-weight:700">${context.industry} · ${context.role}</span> 这张市场地图的 AI 顾问。我会基于当前报告、${context.talents.length} 位候选人、${context.jds.length} 条市场信号，以及你补充的业务场景来追问和建议。`,
+    },
+  ];
+}
+
+function buildSuggestions(context: MarketContext | null): string[] {
+  if (!context) return defaultSuggestions;
+  const industry = context.industry || "当前行业";
+  const role = context.role || "当前岗位";
+  const company = context.companies?.[0] || "头部公司";
+  const apiQuestions = context.questions?.filter(Boolean) || [];
+  const generated = [
+    `结合我的具体业务场景，重新定义 ${industry} ${role} 的人才画像`,
+    `从 ${company} 这类公司挖人，应该优先看哪些经历？`,
+    `当前 ${context.jds.length} 条市场信号说明 ${role} 最关键的能力是什么？`,
+    `基于这张市场地图，帮我设计下一轮候选人搜索策略`,
+  ];
+  return [...apiQuestions, ...generated].slice(0, 4);
+}
+
+function mergeSuggestions(primary: string[], fallback: string[]) {
+  const merged = [...primary, ...fallback].map((item) => item.trim()).filter(Boolean);
+  return Array.from(new Set(merged)).slice(0, 4);
 }
 
 function stripHtml(value: string) {
