@@ -142,6 +142,8 @@ export default function ChatPage() {
       localStorage.setItem(getCaseArchiveKey(caseArchive.position_id), JSON.stringify(caseArchive));
     } catch {}
 
+    if (!shouldPersistCaseArchive(caseArchive)) return;
+
     const timer = window.setTimeout(() => {
       fetch("/api/save-report", {
         method: "POST",
@@ -272,7 +274,6 @@ export default function ChatPage() {
         `当前顾问只服务这一张市场地图：${marketContext?.industry || "未知行业"} · ${marketContext?.role || "未知岗位"}`,
         `搜索数据：${marketContext?.talents.length || 0} 位候选人，${marketContext?.jds.length || 0} 条市场/JD 信号，${marketContext?.companies.length || 0} 家公司。`,
         `公司池：${(marketContext?.companies || []).slice(0, 8).join(" / ") || "暂无"}`,
-        reportSummary ? `市场地图报告摘要：${reportSummary}` : "",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -292,7 +293,7 @@ export default function ChatPage() {
       report_summary: reportSummary,
       business_scenario: userScenario,
       conversation_guidance:
-        "回答时直接推进分析和建议，不要复述同一段理解，也不要为了确认而二次确认。只有缺少行业、岗位、地区、目标公司、业务阶段等关键决策变量时才追问；已在上下文出现的信息视为已知。",
+        "不要复述系统上下文、报告摘要或用户问题；不要先说“我理解/确认一下”再重复一遍。直接给判断、建议或一个必要追问。只有缺少行业、岗位、地区、目标公司、业务阶段等关键决策变量时才追问。",
     };
   };
 
@@ -825,6 +826,12 @@ function normalizeCaseArchive(value: Partial<AdvisorCaseArchive>, positionId: st
   };
 }
 
+function shouldPersistCaseArchive(archive: AdvisorCaseArchive) {
+  return archive.records.some(
+    (record) => record.messages.some((message) => message.role === "user") || Boolean(getValidReportHtml(record.reportHtml)),
+  );
+}
+
 function normalizeRecord(value: unknown, context: MarketContext | null): CaseConversation | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Partial<CaseConversation>;
@@ -899,11 +906,15 @@ function dedupeRepeatedResponse(value: string) {
 
   const paragraphs = cleaned.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
   const uniqueParagraphs: string[] = [];
+  const seenParagraphs = new Set<string>();
   for (const paragraph of paragraphs) {
-    const normalized = stripHtml(paragraph).replace(/\s+/g, " ").trim();
+    const paragraphCleaned = dedupeRepeatedSentences(paragraph);
+    const normalized = normalizeForDedupe(paragraphCleaned);
     const previous = uniqueParagraphs.at(-1);
-    if (previous && stripHtml(previous).replace(/\s+/g, " ").trim() === normalized) continue;
-    uniqueParagraphs.push(paragraph);
+    if (previous && normalizeForDedupe(previous) === normalized) continue;
+    if (seenParagraphs.has(normalized)) continue;
+    seenParagraphs.add(normalized);
+    uniqueParagraphs.push(paragraphCleaned);
   }
 
   const paragraphCleaned = uniqueParagraphs.join("\n\n");
@@ -913,6 +924,39 @@ function dedupeRepeatedResponse(value: string) {
   if (left.length > 80 && left === right) return left;
 
   return paragraphCleaned;
+}
+
+function dedupeRepeatedSentences(value: string) {
+  const parts = value.split(/(?<=[。！？!?；;])\s*/).map((item) => item.trim()).filter(Boolean);
+  if (parts.length < 2) return value;
+
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const normalized = normalizeForDedupe(part);
+    const previous = result.at(-1);
+    if (previous && isNearDuplicate(normalizeForDedupe(previous), normalized)) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(part);
+  }
+  return result.join("");
+}
+
+function normalizeForDedupe(value: string) {
+  return stripHtml(value)
+    .replace(/^(好的|明白|收到|我理解|理解了|确认一下|简单来说|也就是说)[，,：:\s]*/i, "")
+    .replace(/[“”"'`]/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function isNearDuplicate(a: string, b: string) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const shorter = a.length < b.length ? a : b;
+  const longer = a.length < b.length ? b : a;
+  return shorter.length > 24 && longer.includes(shorter);
 }
 
 function getValidReportHtml(value?: string | null) {
