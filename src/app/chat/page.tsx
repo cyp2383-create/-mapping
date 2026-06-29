@@ -59,6 +59,19 @@ type AdvisorCaseArchive = {
   updatedAt: string;
   records: CaseConversation[];
 };
+type CollectionSlot = {
+  id: string;
+  label: string;
+  filled: boolean;
+  evidence?: string;
+};
+type CollectionState = {
+  ready_for_report: boolean;
+  next_slot?: string;
+  filled_slots: CollectionSlot[];
+  missing_slots: CollectionSlot[];
+  rule: string;
+};
 
 const defaultMessages: Message[] = [
   {
@@ -258,22 +271,27 @@ export default function ChatPage() {
     setUnderstanding("");
   };
 
-  const buildChatContext = (mode: "chat" | "generate" = "chat") => {
-    const userScenario = compactHistory
+  const buildChatContext = (mode: "chat" | "generate" = "chat", pendingQuestion = "") => {
+    const historyWithPending = pendingQuestion
+      ? [...compactHistory, { role: "user", content: stripHtml(pendingQuestion).slice(0, 260) }]
+      : compactHistory;
+    const userScenario = historyWithPending
       .filter((item) => item.role === "user")
       .map((item) => item.content)
       .join("\n")
       .slice(-900);
-    const recentHistory = compactHistory.slice(-10);
+    const recentHistory = historyWithPending.slice(-10);
     const reportSummary = stripHtml(marketContext?.report_html || "")
       .replace(/\s+/g, " ")
       .slice(0, 1200);
+    const collectionState = buildCollectionState(marketContext, historyWithPending);
     const contextFrame = {
       role: "assistant",
       content: [
         `当前顾问只服务这一张市场地图：${marketContext?.industry || "未知行业"} · ${marketContext?.role || "未知岗位"}`,
         `搜索数据：${marketContext?.talents.length || 0} 位候选人，${marketContext?.jds.length || 0} 条市场/JD 信号，${marketContext?.companies.length || 0} 家公司。`,
         `公司池：${(marketContext?.companies || []).slice(0, 8).join(" / ") || "暂无"}`,
+        collectionState.missing_slots.length ? `下一步只追问：${collectionState.next_slot}` : "信息槽已足够，可以生成报告。",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -292,8 +310,9 @@ export default function ChatPage() {
       report_html: mode === "generate" ? marketContext?.report_html || "" : "",
       report_summary: reportSummary,
       business_scenario: userScenario,
+      collection_state: collectionState,
       conversation_guidance:
-        "不要复述系统上下文、报告摘要或用户问题；不要先说“我理解/确认一下”再重复一遍。直接给判断、建议或一个必要追问。只有缺少行业、岗位、地区、目标公司、业务阶段等关键决策变量时才追问。",
+        "使用 collection_state 做信息收集闭环。已 filled 的信息槽不得再次确认，不要要求用户对同一个问题确认两次；只追问 next_slot 一个问题。missing_slots 为空时直接 offer_report=true 并说明可生成报告。不要复述系统上下文、报告摘要或用户问题。",
     };
   };
 
@@ -305,12 +324,16 @@ export default function ChatPage() {
     setLoading(true);
     setOfferReport(false);
     append({ role: "user", content: q });
+    const collectionState = buildCollectionState(marketContext, [
+      ...compactHistory,
+      { role: "user", content: stripHtml(q).slice(0, 260) },
+    ]);
 
     try {
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, context: buildChatContext("chat") }),
+        body: JSON.stringify({ question: q, context: buildChatContext("chat", q) }),
       });
 
       if (!resp.ok) throw new Error(`Chat failed: ${resp.status}`);
@@ -353,9 +376,9 @@ export default function ChatPage() {
         content: dedupeRepeatedResponse(answer) || "我没有收到有效响应。你可以换一种描述方式，或者先生成一份人才地图数据。",
         recs,
       });
-      setOfferReport(offer);
+      setOfferReport(offer || collectionState.ready_for_report);
       setUnderstanding(understood);
-      setSuggestions(mergeSuggestions(nextSuggestions, buildSuggestions(marketContext)));
+      setSuggestions(mergeSuggestions(buildSlotSuggestions(collectionState, marketContext), nextSuggestions, buildSuggestions(marketContext)));
     } catch {
       append({ role: "bot", content: "服务暂时不可用。请确认旧 API 服务可访问后再试。" });
     } finally {
@@ -638,7 +661,7 @@ export default function ChatPage() {
                 {marketContext ? `${marketContext.talents.length} 位候选人 / ${marketContext.jds.length} 条市场信号 / ${marketContext.companies.length} 家公司` : "等待市场地图数据"}
               </p>
               <div className="rounded-lg border border-cyan-300/15 bg-cyan-300/8 p-3 text-xs leading-6 text-cyan-50/80">
-                顾问会统一使用市场地图报告、搜索数据、当前对话里的业务场景和下方追问问题，不会脱离这个行业-岗位单独回答。
+                顾问会按信息槽闭环收集业务阶段、目标公司、地域和候选人层级；已回答的信息不会重复确认。
               </div>
             </div>
           </div>
@@ -709,9 +732,91 @@ function buildSuggestions(context: MarketContext | null): string[] {
   return [...apiQuestions, ...generated].slice(0, 4);
 }
 
-function mergeSuggestions(primary: string[], fallback: string[]) {
-  const merged = [...primary, ...fallback].map((item) => item.trim()).filter(Boolean);
+function mergeSuggestions(...groups: string[][]) {
+  const merged = groups.flat().map((item) => item.trim()).filter(Boolean);
   return Array.from(new Set(merged)).slice(0, 4);
+}
+
+function buildSlotSuggestions(state: CollectionState, context: MarketContext | null): string[] {
+  if (state.ready_for_report) {
+    return ["信息已经足够，直接生成顾问画像报告", "基于现有信息给出候选人搜索优先级"];
+  }
+
+  const role = context?.role || "这个岗位";
+  switch (state.next_slot) {
+    case "业务阶段/招聘目的":
+      return [`这是为了0到1搭团队、增长扩张，还是替换升级？`, `我想先明确 ${role} 的招聘目的`];
+    case "目标公司/公司类型":
+      return ["优先从大厂、垂直竞品还是创业公司找人？", "帮我按目标公司类型设计挖人范围"];
+    case "地域范围":
+      return ["候选人主要看北京/上海/深圳/杭州，还是接受远程和海外？"];
+    case "候选人层级":
+      return ["这次更需要负责人/总监级，还是能独立交付的经理级？"];
+    default:
+      return [];
+  }
+}
+
+function buildCollectionState(
+  context: MarketContext | null,
+  history: Array<{ role: string; content: string }>,
+): CollectionState {
+  const userText = history
+    .filter((item) => item.role === "user")
+    .map((item) => item.content)
+    .join("\n");
+  const combinedText = `${context?.industry || ""}\n${context?.role || ""}\n${userText}`;
+  const slots: CollectionSlot[] = [
+    {
+      id: "industry",
+      label: "目标行业",
+      filled: Boolean(context?.industry) || hasAny(combinedText, ["行业", "赛道", "领域", "市场"]),
+      evidence: context?.industry,
+    },
+    {
+      id: "role",
+      label: "目标岗位",
+      filled: Boolean(context?.role) || hasAny(combinedText, ["岗位", "职位", "角色", "负责人", "经理", "总监"]),
+      evidence: context?.role,
+    },
+    {
+      id: "business_stage",
+      label: "业务阶段/招聘目的",
+      filled: hasAny(userText, ["从0到1", "0到1", "增长", "出海", "商业化", "转型", "新业务", "扩张", "搭团队", "替换", "招聘", "面试"]),
+    },
+    {
+      id: "region",
+      label: "地域范围",
+      filled: hasAny(userText, ["北京", "上海", "深圳", "广州", "杭州", "成都", "海外", "全球", "华东", "华南", "北美", "新加坡", "远程"]),
+    },
+    {
+      id: "target_company",
+      label: "目标公司/公司类型",
+      filled: hasAny(userText, ["字节", "腾讯", "阿里", "百度", "华为", "微软", "OpenAI", "大厂", "创业", "竞品", "SaaS", "B2B"]) || Boolean(context?.companies?.length),
+    },
+    {
+      id: "seniority",
+      label: "候选人层级",
+      filled: hasAny(userText, ["高端", "中端", "入门", "专家", "经理", "总监", "VP", "负责人", "leader", "lead", "资深", "高级"]),
+    },
+  ];
+  const requiredIds = new Set(["industry", "role", "business_stage", "target_company"]);
+  const missing = slots.filter((slot) => requiredIds.has(slot.id) && !slot.filled);
+  const optionalMissing = slots.filter((slot) => !requiredIds.has(slot.id) && !slot.filled);
+  const next = missing[0] || optionalMissing[0];
+
+  return {
+    ready_for_report: missing.length === 0,
+    next_slot: next?.label,
+    filled_slots: slots.filter((slot) => slot.filled),
+    missing_slots: missing,
+    rule: "以信息槽是否缺失决定追问，不使用两轮确认。已填写的信息槽不得重复确认。",
+  };
+}
+
+function hasAny(value: string, keywords: string[]) {
+  const lower = value.toLowerCase();
+  return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
 }
 
 function getCaseArchiveKey(positionId: string | number) {
