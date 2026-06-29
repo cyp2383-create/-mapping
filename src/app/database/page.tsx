@@ -8,17 +8,38 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Database, ExternalLink } from "lucide-react";
 
+type TalentRow = {
+  name?: string;
+  current_company?: string;
+  current_title?: string;
+  tier?: string;
+  contact_type?: string;
+  contact_value?: string;
+};
+
+type JobRow = {
+  title?: string;
+  company?: string;
+  salary?: string;
+  location?: string;
+  source_platform?: string;
+  source_url?: string;
+};
+
 function DatabaseContent() {
   const searchParams = useSearchParams();
   const pid = searchParams.get("position_id");
-  const [talents, setTalents] = useState<any[]>([]);
-  const [jds, setJds] = useState<any[]>([]);
+  const [talents, setTalents] = useState<TalentRow[]>([]);
+  const [jds, setJds] = useState<JobRow[]>([]);
   const [meta, setMeta] = useState({ name: "", industry: "", role: "" });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!pid) { setLoading(false); return; }
     (async () => {
+      if (!pid) {
+        setLoading(false);
+        return;
+      }
       try {
         const r = await fetch(`/api/data?position_id=${pid}`);
         const d = await r.json();
@@ -29,8 +50,8 @@ function DatabaseContent() {
     })();
   }, [pid]);
 
-  const tierColor = (t: string) => t === "high" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : t === "mid" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-violet-500/30 bg-violet-500/10 text-violet-400";
-  const tierLabel = (t: string) => t === "high" ? "高" : t === "mid" ? "中" : "低";
+  const tierColor = (t?: string) => t === "high" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : t === "mid" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-violet-500/30 bg-violet-500/10 text-violet-400";
+  const tierLabel = (t?: string) => t === "high" ? "高" : t === "mid" ? "中" : "低";
 
   if (!pid) return (
     <div className="max-w-5xl mx-auto px-6 py-10"><Card><CardHeader><CardTitle className="text-sm flex items-center gap-2"><Database className="h-4 w-4 text-primary" />人才数据库</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground text-center py-8">请先搜索或从历史记录选择一个岗位查看数据</p></CardContent></Card></div>

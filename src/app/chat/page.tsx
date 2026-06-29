@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, FileText, Loader2, Send, Sparkles, Trash2, UserRound } from "lucide-react";
+import { Bot, Clock3, FileCheck2, FileText, Loader2, MessageSquareText, Plus, Send, Sparkles, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -38,6 +38,26 @@ type MarketContext = {
   questions: string[];
   tier_stats?: Record<string, number>;
   report_html?: string;
+  chat_report?: unknown;
+};
+type CaseConversation = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  title: string;
+  summary: string;
+  messages: Message[];
+  reportHtml?: string;
+  reportAt?: string;
+};
+type AdvisorCaseArchive = {
+  version: 1;
+  position_id?: string | number;
+  industry?: string;
+  role?: string;
+  activeRecordId?: string;
+  updatedAt: string;
+  records: CaseConversation[];
 };
 
 const defaultMessages: Message[] = [
@@ -64,6 +84,8 @@ export default function ChatPage() {
   const [suggestions, setSuggestions] = useState<string[]>(defaultSuggestions);
   const [reportHtml, setReportHtml] = useState("");
   const [marketContext, setMarketContext] = useState<MarketContext | null>(null);
+  const [caseArchive, setCaseArchive] = useState<AdvisorCaseArchive | null>(null);
+  const [activeRecordId, setActiveRecordId] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const contextKey = useMemo(() => {
@@ -86,6 +108,50 @@ export default function ChatPage() {
       localStorage.setItem(contextKey, JSON.stringify(messages));
     } catch {}
   }, [contextKey, messages]);
+
+  useEffect(() => {
+    if (!caseArchive || !activeRecordId) return;
+    // Mirror the visible conversation into the persisted case archive.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCaseArchive((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        activeRecordId,
+        updatedAt: new Date().toISOString(),
+        records: prev.records.map((record) =>
+          record.id === activeRecordId
+            ? {
+                ...record,
+                updatedAt: new Date().toISOString(),
+                summary: summarizeMessages(messages),
+                messages,
+                reportHtml: reportHtml || record.reportHtml,
+                reportAt: reportHtml ? record.reportAt || new Date().toISOString() : record.reportAt,
+              }
+            : record,
+        ),
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRecordId, messages, reportHtml]);
+
+  useEffect(() => {
+    if (!caseArchive?.position_id) return;
+    try {
+      localStorage.setItem(getCaseArchiveKey(caseArchive.position_id), JSON.stringify(caseArchive));
+    } catch {}
+
+    const timer = window.setTimeout(() => {
+      fetch("/api/save-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position_id: caseArchive.position_id, chat_report: caseArchive }),
+      }).catch(() => {});
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [caseArchive]);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,16 +184,23 @@ export default function ChatPage() {
           questions: detail.questions || [],
           tier_stats: detail.tier_stats,
           report_html: detail.report_html || "",
+          chat_report: detail.chat_report,
         };
 
         if (cancelled) return;
         setMarketContext(nextContext);
-        setReportHtml(localStorage.getItem(`talent_miner_chat_report:${positionId}`) || "");
         setSuggestions(buildSuggestions(nextContext));
 
         const scopedKey = `${CHAT_KEY}:${positionId}`;
-        const saved = localStorage.getItem(scopedKey);
-        setMessages(saved ? JSON.parse(saved) : buildDefaultMessages(nextContext));
+        const savedMessages = localStorage.getItem(scopedKey);
+        const archive = loadCaseArchive(positionId, nextContext, detail.chat_report, savedMessages);
+        const activeId = archive.activeRecordId || archive.records[0]?.id || "";
+        const active = archive.records.find((record) => record.id === activeId) || archive.records[0];
+
+        setCaseArchive(archive);
+        setActiveRecordId(active?.id || "");
+        setMessages(active?.messages?.length ? active.messages : buildDefaultMessages(nextContext));
+        setReportHtml(active?.reportHtml || localStorage.getItem(`talent_miner_chat_report:${positionId}`) || "");
       } catch {
         if (cancelled) return;
         setMarketContext(null);
@@ -149,6 +222,37 @@ export default function ChatPage() {
   }, [messages, loading]);
 
   const append = (message: Message) => setMessages((prev) => [...prev, message]);
+
+  const selectRecord = (recordId: string) => {
+    const record = caseArchive?.records.find((item) => item.id === recordId);
+    if (!record) return;
+    setActiveRecordId(record.id);
+    setMessages(record.messages?.length ? record.messages : buildDefaultMessages(marketContext));
+    setReportHtml(record.reportHtml || "");
+    setOfferReport(false);
+    setUnderstanding("");
+  };
+
+  const createRecord = () => {
+    if (!marketContext) return;
+    const record = createConversationRecord(marketContext);
+    setCaseArchive((prev) => {
+      const archive =
+        prev ||
+        createCaseArchive(marketContext.position_id || "default", marketContext, undefined, JSON.stringify(buildDefaultMessages(marketContext)));
+      return {
+        ...archive,
+        activeRecordId: record.id,
+        updatedAt: new Date().toISOString(),
+        records: [record, ...archive.records],
+      };
+    });
+    setActiveRecordId(record.id);
+    setMessages(record.messages);
+    setReportHtml("");
+    setOfferReport(false);
+    setUnderstanding("");
+  };
 
   const buildChatContext = () => {
     const userScenario = compactHistory
@@ -300,11 +404,19 @@ export default function ChatPage() {
         setReportHtml(report);
         const pid = Number(marketContext?.position_id || localStorage.getItem("current_position_id") || "0");
         localStorage.setItem(`talent_miner_chat_report:${pid || "default"}`, report);
-        fetch("/api/save-report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ position_id: pid, chat_report: report }),
-        }).catch(() => {});
+        setCaseArchive((prev) =>
+          prev
+            ? {
+                ...prev,
+                updatedAt: new Date().toISOString(),
+                records: prev.records.map((record) =>
+                  record.id === activeRecordId
+                    ? { ...record, reportHtml: report, reportAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+                    : record,
+                ),
+              }
+            : prev,
+        );
         append({ role: "bot", content: "人才画像报告已生成。你可以在下方打开预览，或继续让我补充搜索策略。" });
       } else {
         append({ role: "bot", content: "报告没有生成成功。建议先补充行业、岗位、区域和目标公司范围。" });
@@ -328,7 +440,20 @@ export default function ChatPage() {
   const clearChat = () => {
     if (!confirm("确定清空所有对话记录吗？")) return;
     localStorage.removeItem(contextKey);
-    setMessages(buildDefaultMessages(marketContext));
+    if (caseArchive?.position_id) localStorage.removeItem(getCaseArchiveKey(caseArchive.position_id));
+    if (marketContext) {
+      const nextArchive = createCaseArchive(
+        marketContext.position_id || "default",
+        marketContext,
+        undefined,
+        JSON.stringify(buildDefaultMessages(marketContext)),
+      );
+      setCaseArchive(nextArchive);
+      setActiveRecordId(nextArchive.activeRecordId || nextArchive.records[0]?.id || "");
+      setMessages(nextArchive.records[0]?.messages || buildDefaultMessages(marketContext));
+    } else {
+      setMessages(buildDefaultMessages(marketContext));
+    }
     setOfferReport(false);
     setUnderstanding("");
     setSuggestions(buildSuggestions(marketContext));
@@ -343,7 +468,58 @@ export default function ChatPage() {
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.03)_1px,transparent_1px)] bg-[size:72px_72px] [mask-image:linear-gradient(to_bottom,black,transparent_80%)]" />
       </div>
 
-      <section className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-7xl gap-6 xl:grid-cols-[1fr_360px]">
+      <section className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-7xl gap-6 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+        <aside className="flex min-h-0 flex-col rounded-lg border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Case History</p>
+              <h2 className="mt-1 text-lg font-bold text-white">历史对话</h2>
+            </div>
+            <Button variant="outline" size="sm" onClick={createRecord} disabled={!marketContext || loading} className="gap-1 border-white/10 px-2">
+              <Plus className="h-3.5 w-3.5" />
+              新建
+            </Button>
+          </div>
+          <div className="mb-3 rounded-lg border border-cyan-300/15 bg-cyan-300/8 p-3 text-xs leading-5 text-cyan-50/80">
+            每个行业-岗位是一个 case；每条记录保存时间、对话摘要和报告产出。
+          </div>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+            {caseArchive?.records.length ? (
+              caseArchive.records.map((record) => (
+                <button
+                  key={record.id}
+                  onClick={() => selectRecord(record.id)}
+                  className={`w-full rounded-lg border p-3 text-left transition ${
+                    record.id === activeRecordId ? "border-cyan-300/40 bg-cyan-300/10" : "border-white/10 bg-black/15 hover:border-cyan-300/25"
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                      <Clock3 className="h-3 w-3" />
+                      {formatTime(record.updatedAt)}
+                    </span>
+                    {record.reportHtml ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-300/10 px-2 py-0.5 text-[11px] text-emerald-100">
+                        <FileCheck2 className="h-3 w-3" />
+                        报告
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-slate-400">
+                        <MessageSquareText className="h-3 w-3" />
+                        对话
+                      </span>
+                    )}
+                  </div>
+                  <strong className="block truncate text-sm text-white">{record.title}</strong>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">{record.summary || "尚未开始新的追问"}</p>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-slate-500">暂无历史对话</div>
+            )}
+          </div>
+        </aside>
+
         <div className="flex min-h-0 flex-col rounded-lg border border-white/10 bg-white/[0.035] shadow-2xl shadow-black/30 backdrop-blur-2xl">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
             <div>
@@ -530,6 +706,183 @@ function buildSuggestions(context: MarketContext | null): string[] {
 function mergeSuggestions(primary: string[], fallback: string[]) {
   const merged = [...primary, ...fallback].map((item) => item.trim()).filter(Boolean);
   return Array.from(new Set(merged)).slice(0, 4);
+}
+
+function getCaseArchiveKey(positionId: string | number) {
+  return `${CHAT_KEY}:case:${positionId}`;
+}
+
+function loadCaseArchive(positionId: string | number, context: MarketContext, chatReport?: unknown, savedMessages?: string | null): AdvisorCaseArchive {
+  const fromLocal = parseCaseArchive(readLocalStorage(getCaseArchiveKey(positionId)), positionId, context);
+  if (fromLocal) return fromLocal;
+
+  const fromReport = parseCaseArchive(chatReport, positionId, context);
+  if (fromReport) return fromReport;
+
+  if (typeof chatReport === "string" && chatReport.trim()) {
+    const record = createConversationRecord(context, {
+      reportHtml: chatReport,
+      summary: "已生成顾问报告",
+      reportAt: new Date().toISOString(),
+    });
+    return createCaseArchive(positionId, context, [record], record.id);
+  }
+
+  const parsedMessages = parseMessages(savedMessages);
+  if (parsedMessages.length) {
+    const record = createConversationRecord(context, {
+      messages: parsedMessages,
+      summary: summarizeMessages(parsedMessages),
+    });
+    return createCaseArchive(positionId, context, [record], record.id);
+  }
+
+  const record = createConversationRecord(context);
+  return createCaseArchive(positionId, context, [record], record.id);
+}
+
+function createCaseArchive(
+  positionId: string | number,
+  context: MarketContext | null,
+  recordsOrChatReport?: CaseConversation[] | unknown,
+  savedMessagesOrActiveId?: string | null,
+): AdvisorCaseArchive {
+  const records = Array.isArray(recordsOrChatReport)
+    ? recordsOrChatReport
+    : parseMessages(savedMessagesOrActiveId).length
+      ? [
+          createConversationRecord(context, {
+            messages: parseMessages(savedMessagesOrActiveId),
+            summary: summarizeMessages(parseMessages(savedMessagesOrActiveId)),
+          }),
+        ]
+      : [createConversationRecord(context)];
+
+  return normalizeCaseArchive(
+    {
+      version: 1,
+      position_id: positionId,
+      industry: context?.industry,
+      role: context?.role,
+      activeRecordId: Array.isArray(recordsOrChatReport) ? savedMessagesOrActiveId || records[0]?.id : records[0]?.id,
+      updatedAt: new Date().toISOString(),
+      records,
+    },
+    positionId,
+    context,
+  );
+}
+
+function createConversationRecord(
+  context: MarketContext | null,
+  overrides: Partial<CaseConversation> & { messages?: Message[] } = {},
+): CaseConversation {
+  const now = new Date().toISOString();
+  const messages = overrides.messages?.length ? overrides.messages : buildDefaultMessages(context);
+  return {
+    id: overrides.id || `case_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: overrides.createdAt || now,
+    updatedAt: overrides.updatedAt || overrides.reportAt || now,
+    title: overrides.title || buildRecordTitle(context, messages),
+    summary: overrides.summary || summarizeMessages(messages),
+    messages,
+    reportHtml: overrides.reportHtml,
+    reportAt: overrides.reportAt,
+  };
+}
+
+function parseCaseArchive(value: unknown, positionId: string | number, context: MarketContext | null): AdvisorCaseArchive | null {
+  const parsed = typeof value === "string" ? parseJson(value) : value;
+  if (!parsed || typeof parsed !== "object") return null;
+  const candidate = parsed as Partial<AdvisorCaseArchive>;
+  if (!Array.isArray(candidate.records)) return null;
+  return normalizeCaseArchive(candidate, positionId, context);
+}
+
+function normalizeCaseArchive(value: Partial<AdvisorCaseArchive>, positionId: string | number, context: MarketContext | null): AdvisorCaseArchive {
+  const records = (value.records || [])
+    .map((record) => normalizeRecord(record, context))
+    .filter((record): record is CaseConversation => Boolean(record))
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  if (!records.length) records.push(createConversationRecord(context));
+
+  const activeRecordId = records.some((record) => record.id === value.activeRecordId) ? value.activeRecordId : records[0].id;
+  return {
+    version: 1,
+    position_id: value.position_id || positionId,
+    industry: value.industry || context?.industry,
+    role: value.role || context?.role,
+    activeRecordId,
+    updatedAt: value.updatedAt || records[0].updatedAt || new Date().toISOString(),
+    records,
+  };
+}
+
+function normalizeRecord(value: unknown, context: MarketContext | null): CaseConversation | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Partial<CaseConversation>;
+  const messages = parseMessages(record.messages);
+  return createConversationRecord(context, {
+    ...record,
+    messages: messages.length ? messages : buildDefaultMessages(context),
+    summary: record.summary || summarizeMessages(messages),
+  });
+}
+
+function parseMessages(value: unknown): Message[] {
+  const parsed = typeof value === "string" ? parseJson(value) : value;
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter((item) => item && typeof item === "object" && (item.role === "user" || item.role === "bot"))
+    .map((item) => ({
+      role: item.role,
+      content: typeof item.content === "string" ? item.content : "",
+      recs: Array.isArray(item.recs) ? item.recs : undefined,
+    }));
+}
+
+function parseJson(value?: string | null) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function readLocalStorage(key: string) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function buildRecordTitle(context: MarketContext | null, messages: Message[]) {
+  const firstUser = messages.find((message) => message.role === "user")?.content;
+  if (firstUser) return stripHtml(firstUser).slice(0, 28);
+  if (context?.industry && context?.role) return `${context.industry} · ${context.role}`;
+  return "新对话";
+}
+
+function summarizeMessages(messages: Message[]) {
+  const userMessages = messages.filter((message) => message.role === "user").map((message) => stripHtml(message.content));
+  const lastUser = userMessages.at(-1);
+  if (lastUser) return lastUser.slice(0, 54);
+  const bot = messages.find((message) => message.role === "bot")?.content;
+  return bot ? stripHtml(bot).slice(0, 54) : "尚未开始新的追问";
+}
+
+function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "刚刚";
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function stripHtml(value: string) {
