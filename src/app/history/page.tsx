@@ -30,18 +30,24 @@ type HistoryRecord = {
 
 const openInTab = (html: string) => { const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); } };
 
-const openChatReport = (chatReport: unknown) => {
+const openChatReport = async (chatReport: unknown, id: number) => {
   const parsed = typeof chatReport === "string" ? tryParseJson(chatReport) || chatReport : chatReport;
-  if (typeof parsed === "string") {
+  if (typeof parsed === "string" && isValidReportHtml(parsed)) {
     openInTab(parsed);
     return;
   }
 
   if (parsed && typeof parsed === "object" && Array.isArray((parsed as CaseArchive).records)) {
     const records = (parsed as CaseArchive).records || [];
-    const latestReport = records.find((record) => typeof record.reportHtml === "string" && record.reportHtml.trim())?.reportHtml;
+    const hasPlaceholderReport = records.some((record) => isPlaceholderReport(record.reportHtml));
+    const latestReport = records.find((record) => isValidReportHtml(record.reportHtml))?.reportHtml;
     if (latestReport) {
       openInTab(latestReport);
+      return;
+    }
+
+    if (hasPlaceholderReport) {
+      await openReportLazy(id);
       return;
     }
 
@@ -55,7 +61,10 @@ const openChatReport = (chatReport: unknown) => {
       })
       .join("");
     openInTab(`<!doctype html><html><head><meta charset="utf-8"><title>Advisor Case History</title><style>body{margin:0;background:#08111f;color:#e5edf7;font:14px Inter,Arial,sans-serif;padding:32px}main{max-width:880px;margin:0 auto}h1{font-size:24px}article{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);border-radius:12px;padding:16px;margin:12px 0}time,span{color:#67e8f9;font-size:12px}h3{margin:8px 0 6px;font-size:16px}p{color:#aab7c7;line-height:1.7}</style></head><body><main><h1>Advisor Case History</h1>${rows || "<p>No records.</p>"}</main></body></html>`);
+    return;
   }
+
+  await openReportLazy(id);
 };
 
 const tryParseJson = (value: string) => {
@@ -73,6 +82,9 @@ const formatCaseTime = (value?: string) => {
   const date = value ? new Date(value) : new Date();
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("zh-CN");
 };
+
+const isPlaceholderReport = (value?: string) => Boolean(value) && /Test merge report/i.test((value || "").replace(/<[^>]*>/g, ""));
+const isValidReportHtml = (value?: string) => Boolean(value?.trim()) && !isPlaceholderReport(value);
 
 const openReportLazy = async (id: number) => {
   const w = window.open("", "_blank");
@@ -120,7 +132,7 @@ export default function HistoryPage() {
                   <div><span className="text-sm font-semibold">{r.name || `报告 #${r.id}`}</span><span className="text-xs text-muted-foreground ml-3">{r.industry} · {r.role_direction} · {(r.created_at || "").substring(0, 10)}</span></div>
                   <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" size="sm" className="text-xs" onClick={() => openReportLazy(r.id)}><FileText className="h-3 w-3 mr-1 text-amber-400" />市场报告</Button>
-                    {r.chat_report ? <Button variant="outline" size="sm" className="text-xs" onClick={() => openChatReport(r.chat_report)}><MessageCircle className="h-3 w-3 mr-1 text-emerald-400" />顾问画像</Button> : null}
+                    {r.chat_report ? <Button variant="outline" size="sm" className="text-xs" onClick={() => openChatReport(r.chat_report, r.id)}><MessageCircle className="h-3 w-3 mr-1 text-emerald-400" />顾问画像</Button> : null}
                     <Link href={`/database?position_id=${r.id}`}><Button variant="outline" size="sm" className="text-xs"><Database className="h-3 w-3 mr-1 text-sky-400" />人才库</Button></Link>
                     {r.podcast_script ? <Button variant="outline" size="sm" className="text-xs" onClick={() => openPodcastWithPlayer(r.podcast_script || "", r.id)}><Podcast className="h-3 w-3 mr-1 text-violet-400" />播客</Button> : null}
                   </div>

@@ -200,7 +200,9 @@ export default function ChatPage() {
         setCaseArchive(archive);
         setActiveRecordId(active?.id || "");
         setMessages(active?.messages?.length ? active.messages : buildDefaultMessages(nextContext));
-        setReportHtml(active?.reportHtml || localStorage.getItem(`talent_miner_chat_report:${positionId}`) || "");
+        setReportHtml(
+          getValidReportHtml(active?.reportHtml) || getValidReportHtml(localStorage.getItem(`talent_miner_chat_report:${positionId}`)) || "",
+        );
       } catch {
         if (cancelled) return;
         setMarketContext(null);
@@ -430,7 +432,7 @@ export default function ChatPage() {
 
   const openReport = () => {
     const scopedKey = `talent_miner_chat_report:${marketContext?.position_id || "default"}`;
-    const html = reportHtml || localStorage.getItem(scopedKey) || "";
+    const html = getValidReportHtml(reportHtml) || getValidReportHtml(localStorage.getItem(scopedKey)) || "";
     if (!html) return;
     const win = window.open("", "_blank");
     win?.document.write(html);
@@ -570,7 +572,7 @@ export default function ChatPage() {
               </div>
             )}
 
-            {(reportHtml || (typeof window !== "undefined" && localStorage.getItem(`talent_miner_chat_report:${marketContext?.position_id || "default"}`))) && (
+            {(getValidReportHtml(reportHtml) || (typeof window !== "undefined" && getValidReportHtml(localStorage.getItem(`talent_miner_chat_report:${marketContext?.position_id || "default"}`)))) && (
               <div className="mb-4 flex items-center justify-between rounded-lg border border-cyan-300/20 bg-cyan-300/8 p-3 text-sm text-cyan-100">
                 <span>已有一份对话生成的人才画像报告。</span>
                 <Button variant="outline" size="sm" onClick={openReport} className="border-cyan-300/20">
@@ -719,9 +721,10 @@ function loadCaseArchive(positionId: string | number, context: MarketContext, ch
   const fromReport = parseCaseArchive(chatReport, positionId, context);
   if (fromReport) return fromReport;
 
-  if (typeof chatReport === "string" && chatReport.trim()) {
+  const validLegacyReport = typeof chatReport === "string" ? getValidReportHtml(chatReport) : "";
+  if (validLegacyReport) {
     const record = createConversationRecord(context, {
-      reportHtml: chatReport,
+      reportHtml: validLegacyReport,
       summary: "已生成顾问报告",
       reportAt: new Date().toISOString(),
     });
@@ -786,8 +789,8 @@ function createConversationRecord(
     title: overrides.title || buildRecordTitle(context, messages),
     summary: overrides.summary || summarizeMessages(messages),
     messages,
-    reportHtml: overrides.reportHtml,
-    reportAt: overrides.reportAt,
+    reportHtml: getValidReportHtml(overrides.reportHtml),
+    reportAt: getValidReportHtml(overrides.reportHtml) ? overrides.reportAt : undefined,
   };
 }
 
@@ -827,6 +830,8 @@ function normalizeRecord(value: unknown, context: MarketContext | null): CaseCon
     ...record,
     messages: messages.length ? messages : buildDefaultMessages(context),
     summary: record.summary || summarizeMessages(messages),
+    reportHtml: getValidReportHtml(record.reportHtml),
+    reportAt: getValidReportHtml(record.reportHtml) ? record.reportAt : undefined,
   });
 }
 
@@ -883,6 +888,16 @@ function formatTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getValidReportHtml(value?: string | null) {
+  if (!value || !value.trim()) return "";
+  if (isPlaceholderReport(value)) return "";
+  return value;
+}
+
+function isPlaceholderReport(value: string) {
+  return /Test merge report/i.test(stripHtml(value));
 }
 
 function stripHtml(value: string) {
