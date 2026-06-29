@@ -256,29 +256,30 @@ export default function ChatPage() {
     setUnderstanding("");
   };
 
-  const buildChatContext = () => {
+  const buildChatContext = (mode: "chat" | "generate" = "chat") => {
     const userScenario = compactHistory
       .filter((item) => item.role === "user")
       .map((item) => item.content)
       .join("\n")
-      .slice(-1800);
-    const reportSummary = stripHtml(marketContext?.report_html || "").slice(0, 1800);
+      .slice(-900);
+    const recentHistory = compactHistory.slice(-10);
+    const reportSummary = stripHtml(marketContext?.report_html || "")
+      .replace(/\s+/g, " ")
+      .slice(0, 1200);
     const contextFrame = {
       role: "assistant",
       content: [
         `当前顾问只服务这一张市场地图：${marketContext?.industry || "未知行业"} · ${marketContext?.role || "未知岗位"}`,
         `搜索数据：${marketContext?.talents.length || 0} 位候选人，${marketContext?.jds.length || 0} 条市场/JD 信号，${marketContext?.companies.length || 0} 家公司。`,
         `公司池：${(marketContext?.companies || []).slice(0, 8).join(" / ") || "暂无"}`,
-        `智能追问：${(marketContext?.questions || []).slice(0, 4).join(" / ") || "暂无"}`,
         reportSummary ? `市场地图报告摘要：${reportSummary}` : "",
-        userScenario ? `用户已补充的具体业务场景：${userScenario}` : "",
       ]
         .filter(Boolean)
         .join("\n"),
     };
 
     return {
-      history: [contextFrame, ...compactHistory].slice(-21),
+      history: [contextFrame, ...recentHistory],
       position_id: marketContext?.position_id,
       industry: marketContext?.industry,
       role: marketContext?.role,
@@ -287,9 +288,11 @@ export default function ChatPage() {
       companies: marketContext?.companies || [],
       tier_stats: marketContext?.tier_stats,
       questions: marketContext?.questions || [],
-      report_html: marketContext?.report_html || "",
+      report_html: mode === "generate" ? marketContext?.report_html || "" : "",
       report_summary: reportSummary,
       business_scenario: userScenario,
+      conversation_guidance:
+        "回答时直接推进分析和建议，不要复述同一段理解，也不要为了确认而二次确认。只有缺少行业、岗位、地区、目标公司、业务阶段等关键决策变量时才追问；已在上下文出现的信息视为已知。",
     };
   };
 
@@ -306,7 +309,7 @@ export default function ChatPage() {
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, context: buildChatContext() }),
+        body: JSON.stringify({ question: q, context: buildChatContext("chat") }),
       });
 
       if (!resp.ok) throw new Error(`Chat failed: ${resp.status}`);
@@ -346,7 +349,7 @@ export default function ChatPage() {
 
       append({
         role: "bot",
-        content: answer || "我没有收到有效响应。你可以换一种描述方式，或者先生成一份人才地图数据。",
+        content: dedupeRepeatedResponse(answer) || "我没有收到有效响应。你可以换一种描述方式，或者先生成一份人才地图数据。",
         recs,
       });
       setOfferReport(offer);
@@ -370,7 +373,7 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: "生成人才画像报告",
-          context: buildChatContext(),
+          context: buildChatContext("generate"),
           action: "generate",
         }),
       });
@@ -888,6 +891,28 @@ function formatTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function dedupeRepeatedResponse(value: string) {
+  const cleaned = value.trim();
+  if (!cleaned) return "";
+
+  const paragraphs = cleaned.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  const uniqueParagraphs: string[] = [];
+  for (const paragraph of paragraphs) {
+    const normalized = stripHtml(paragraph).replace(/\s+/g, " ").trim();
+    const previous = uniqueParagraphs.at(-1);
+    if (previous && stripHtml(previous).replace(/\s+/g, " ").trim() === normalized) continue;
+    uniqueParagraphs.push(paragraph);
+  }
+
+  const paragraphCleaned = uniqueParagraphs.join("\n\n");
+  const half = Math.floor(paragraphCleaned.length / 2);
+  const left = paragraphCleaned.slice(0, half).trim();
+  const right = paragraphCleaned.slice(half).trim();
+  if (left.length > 80 && left === right) return left;
+
+  return paragraphCleaned;
 }
 
 function getValidReportHtml(value?: string | null) {
