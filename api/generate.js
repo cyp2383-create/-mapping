@@ -531,9 +531,7 @@ async function searchCompanyPages(tav, companies, searchIntent) {
 
 async function searchLinkedIn(tav, companies, role, searchIntent) {
   const targetCount = 6;
-  const firstRound = await Promise.all(
-    companies.slice(0,6).map(c => searchLinkedInProfilesForCompany(tav, c.name, role, 3, searchIntent))
-  );
+  const firstRound = await searchCandidateProfilesFirstRound(tav, companies, role, searchIntent);
   const people = firstRound.flat();
   let ranked = rankProfileResults(dedupeByProfileUrl(people), role, searchIntent);
   if (ranked.length < targetCount) {
@@ -541,6 +539,24 @@ async function searchLinkedIn(tav, companies, role, searchIntent) {
     ranked = rankProfileResults(dedupeByProfileUrl([...ranked, ...broader]), role, searchIntent);
   }
   return ranked.slice(0,40);
+}
+
+async function searchCandidateProfilesFirstRound(tav, companies, role, searchIntent) {
+  const searches = [
+    searchGeneralCandidateProfiles(tav, role, 8, searchIntent),
+    ...companies.slice(0,4).map(c => searchLinkedInProfilesForCompany(tav, c.name, role, 3, searchIntent))
+  ];
+  return Promise.all(searches);
+}
+
+async function searchGeneralCandidateProfiles(tav, role, maxResults=8, searchIntent) {
+  const roleName = normalizeText(role);
+  const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
+  const roleQuery = buildCandidateRoleQuery(roleName, searchIntent);
+  const query = `${roleQuery} ${searchSentence} 个人主页 公开资料 候选人 领英 LinkedIn GitHub 知乎 脉脉 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`;
+  const results = await tav.search(normalizeText(query), maxResults);
+  return filterLinkedInProfileResults(results, '', roleName, searchIntent)
+    .map(r => ({...r, company: extractCompanyFromTitle(r.title) || '', search_query: query}));
 }
 
 async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3, searchIntent) {
