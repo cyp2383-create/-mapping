@@ -614,31 +614,30 @@ function isAvoidedExactRole(term, roleDecomposition) {
 }
 
 function buildGeneralJDSearchQuery(role, searchIntent) {
-  const roleClause = buildCompactJDRoleClause(role, searchIntent);
-  const locationClause = buildCompactLocationClause(searchIntent);
-  const industryTerms = buildJDIndustryTerms(searchIntent);
+  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 2).join(' ');
+  const locationTerms = buildSimpleJDLocationTerms(searchIntent).slice(0, 1).join(' ');
+  const industryTerms = buildSimpleJDIndustryTerms(searchIntent).slice(0, 2).join(' ');
   const siteScope = hasChinaLocationPreference(searchIntent) ? 'site:liepin.com/job' : '';
-  return normalizeText(`${siteScope} ${roleClause} ${locationClause} ${industryTerms} (招聘 OR 职位 OR 岗位 OR JD OR job description) -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+  return normalizeText(`${siteScope} ${roleTerms} ${locationTerms} ${industryTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
 }
 
 function buildCompanyJDSearchQuery(company, role, searchIntent) {
-  const roleClause = buildCompactJDRoleClause(role, searchIntent);
-  const locationClause = buildCompactLocationClause(searchIntent);
-  const industryTerms = buildJDIndustryTerms(searchIntent);
-  return normalizeText(`"${company}" ${roleClause} ${locationClause} ${industryTerms} (招聘 OR 职位 OR 岗位 OR careers OR jobs) -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 2).join(' ');
+  const locationTerms = buildSimpleJDLocationTerms(searchIntent).slice(0, 1).join(' ');
+  return normalizeText(`${company} ${roleTerms} ${locationTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
 }
 
 function buildBroaderJDSearchQuery(role, searchIntent, companies) {
-  const roleClause = buildCompactJDRoleClause(role, searchIntent);
-  const locationClause = buildCompactLocationClause(searchIntent);
+  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 3).join(' ');
+  const locationTerms = buildSimpleJDLocationTerms(searchIntent).slice(0, 1).join(' ');
   const companyTerms = companies
-    .slice(0, 8)
+    .slice(0, 4)
     .map(c => normalizeText(getCompanyName(c)))
     .filter(Boolean)
-    .map(name => `"${name}"`)
-    .join(' OR ');
-  const industryTerms = buildJDIndustryTerms(searchIntent);
-  return normalizeText(`${roleClause} ${locationClause} ${industryTerms} ${companyTerms} 招聘 岗位 职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+    .join(' ');
+  const industryTerms = buildSimpleJDIndustryTerms(searchIntent).slice(0, 2).join(' ');
+  const siteScope = hasChinaLocationPreference(searchIntent) ? 'site:liepin.com/job' : '';
+  return normalizeText(`${siteScope} ${roleTerms} ${locationTerms} ${industryTerms} ${companyTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
 }
 
 function buildJDIndustryTerms(searchIntent) {
@@ -651,6 +650,36 @@ function buildJDIndustryTerms(searchIntent) {
   if (/制造|供应链|物流/i.test(text)) terms.push('供应链');
   if (!terms.length) return '';
   return `(${unique(terms).slice(0, 4).map(term => `"${term}"`).join(' OR ')})`;
+}
+
+function buildSimpleJDIndustryTerms(searchIntent) {
+  const text = normalizeText(`${searchIntent?.search_sentence || ''} ${searchIntent?.rewritten_intent || ''}`);
+  const terms = [];
+  if (/互联网|科技|技术公司|AI|人工智能|SaaS|软件|平台/i.test(text)) terms.push('互联网', '科技');
+  if (/电商|内容电商|零售/i.test(text)) terms.push('电商');
+  if (/金融|支付|FinTech/i.test(text)) terms.push('金融科技');
+  if (/游戏|文娱|内容|社区/i.test(text)) terms.push('内容');
+  if (/制造|供应链|物流/i.test(text)) terms.push('供应链');
+  return unique(terms);
+}
+
+function buildSimpleJDLocationTerms(searchIntent) {
+  const terms = searchIntent?.location_terms || [];
+  const preferred = ['北京', '上海', '深圳', '广州', '杭州', '成都', '武汉', '南京', '苏州'];
+  return preferred.filter(city => terms.some(term => includesLoose(city, term) || includesLoose(term, city)));
+}
+
+function buildSimpleJDRoleTerms(role, searchIntent) {
+  const decomp = searchIntent?.role_decomposition || {};
+  const roleTerms = unique([
+    ...inferAdjacentRoleTerms(`${role} ${decomp.search_role || ''}`),
+    ...extractSearchTokens(decomp.search_role || role),
+  ])
+    .filter(term => !isAvoidedExactRole(term, decomp))
+    .filter(isUsefulProfileRoleTerm)
+    .filter(isUsefulJDRoleTerm);
+  const preferred = roleTerms.filter(term => /[\u4e00-\u9fa5]/.test(term) || /People Analytics|GTM|RevOps|SalesOps|Customer Success|MLOps|FP&A/i.test(term));
+  return unique([...preferred, ...roleTerms]).slice(0, 8);
 }
 
 function parseLooseJson(text) {
