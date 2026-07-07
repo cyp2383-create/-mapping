@@ -547,11 +547,10 @@ async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3
   const companyName = normalizeText(getCompanyName(company));
   const roleName = normalizeText(role);
   const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
-  const locationClause = buildLocationQueryClause(searchIntent);
-  const roleQuery = buildRoleQueryTerms(roleName, searchIntent);
+  const roleQuery = buildCandidateRoleQuery(roleName, searchIntent);
   const queries = [
-    `site:linkedin.com/in/ "${companyName}" ${roleQuery} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
-    `site:linkedin.com/in/ "${companyName}" ${searchSentence} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
+    `site:linkedin.com/in/ "${companyName}" ${roleQuery} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    `site:linkedin.com/in/ "${companyName}" ${searchSentence} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
   ].map(normalizeText).filter(Boolean);
 
   let collected = [];
@@ -568,8 +567,7 @@ async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3
 async function searchBroaderLinkedInProfiles(tav, role, searchIntent, companies, needed=5) {
   const roleName = normalizeText(role);
   const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
-  const locationClause = buildLocationQueryClause(searchIntent);
-  const roleQuery = buildRoleQueryTerms(roleName, searchIntent);
+  const roleQuery = buildCandidateRoleQuery(roleName, searchIntent);
   const companyTerms = companies
     .slice(0, 6)
     .map(c => normalizeText(getCompanyName(c)))
@@ -577,7 +575,7 @@ async function searchBroaderLinkedInProfiles(tav, role, searchIntent, companies,
     .map(name => `"${name}"`)
     .join(' OR ');
   const queries = [
-    `(site:linkedin.com/in/ OR site:github.com OR site:zhihu.com/people OR site:x.com OR site:twitter.com OR site:medium.com OR site:substack.com) ${roleQuery} ${searchSentence} ${locationClause} ${companyTerms} 个人主页 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
+    `${roleQuery} ${searchSentence} ${companyTerms} 个人主页 公开资料 领英 LinkedIn GitHub 知乎 脉脉 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
   ].map(normalizeText).filter(Boolean);
 
   const query = queries[0];
@@ -601,7 +599,8 @@ function filterLinkedInProfileResults(results, company, role, searchIntent) {
     const text = normalizeText(`${r.title || ''} ${r.snippet || ''}`);
     const hasCompany = company && includesLoose(text, company);
     const hasRole = roleTokens.length ? roleTokens.some(token => includesLoose(text, token)) : false;
-    return hasCompany || hasRole;
+    const fromCompanyQuery = !!company && isPublicPersonProfileUrl(r);
+    return hasCompany || hasRole || fromCompanyQuery;
   });
   return filtered;
 }
@@ -624,9 +623,10 @@ async function evaluateCandidateFit(ai, candidates, input, searchIntent) {
 判断原则:
 1. 只根据候选人的公开资料标题、摘要、公司、链接判断；证据不足要降分，不能脑补履历。
 2. 高分候选人必须在职能方向、业务阶段、职责关键词、公司/行业背景上整体匹配。
-3. 只是网页里出现某个关键词不代表匹配；实习生、学生、纯技术文档、公司页、招聘页、岗位页、课程页、明显无关职能要 reject。
-4. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
-5. 不要新增候选人，只评估给定 index。
+3. 信息不足时不要直接 reject，应给 weak/possible 并写 risk；只有明显不是人、纯技术文档、公司页、招聘页、岗位页、课程页、学生/实习生或明显无关职能才 reject。
+4. 只是网页里出现某个关键词不代表匹配，要结合 title/snippet/company/url 形成判断。
+5. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
+6. 不要新增候选人，只评估给定 index。
 
 返回严格 JSON 数组，每条格式:
 [
@@ -753,6 +753,7 @@ function isPublicPersonProfileUrl(result) {
     const parts = url.pathname.split('/').filter(Boolean);
     if (host.endsWith('github.com')) return parts.length === 1 && !isReservedProfileSlug(parts[0]);
     if (host.endsWith('zhihu.com')) return parts[0] === 'people' && !!parts[1];
+    if (host.endsWith('maimai.cn')) return /\/profile\//i.test(url.pathname) || /\/contact\/detail\//i.test(url.pathname);
     if (host === 'x.com' || host.endsWith('twitter.com')) return parts.length === 1 && !isReservedProfileSlug(parts[0]);
     if (host.endsWith('medium.com')) return parts[0]?.startsWith('@') || parts.length === 1;
     if (host.endsWith('substack.com')) return !/(\/p\/|\/post\/|\/archive|\/about)/i.test(url.pathname);
@@ -801,6 +802,7 @@ function canonicalProfileUrl(rawUrl) {
         return `${url.protocol}//${host}/${parts[0] || ''}`.replace(/\/$/, '');
       }
       if (host.endsWith('zhihu.com') && parts[0] === 'people' && parts[1]) return `${url.protocol}//${host}/people/${parts[1]}`;
+      if (host.endsWith('maimai.cn')) return `${url.protocol}//${host}${url.pathname.replace(/\/+$/, '')}`;
       return `${url.protocol}//${host}${url.pathname.replace(/\/+$/, '')}`;
     }
     if (parts[0]?.toLowerCase() !== 'in' || !parts[1]) return '';
@@ -826,6 +828,21 @@ function buildRoleQueryTerms(role, searchIntent) {
   ].map(normalizeText).filter(Boolean);
   const unique = [...new Set(tokens)].slice(0, 8);
   return unique.map(term => term.length > 18 ? term : `"${term}"`).join(' ');
+}
+
+function buildCandidateRoleQuery(role, searchIntent) {
+  const tokens = [
+    role,
+    ...(searchIntent?.role_keywords || []),
+    ...extractSearchTokens(role),
+    ...extractSearchTokens(searchIntent?.search_sentence || '').slice(0, 4),
+  ]
+    .map(normalizeText)
+    .filter(Boolean)
+    .filter(term => term.length >= 2 && !/招聘|岗位|职位|JD|职责|要求/i.test(term));
+  const unique = [...new Set(tokens)].slice(0, 8);
+  if (!unique.length) return normalizeText(role);
+  return `(${unique.map(term => `"${term}"`).join(' OR ')})`;
 }
 
 function normalizeText(value) {
@@ -1002,6 +1019,7 @@ function detectPlatform(rawUrl) {
     if (host.endsWith('medium.com')) return 'medium';
     if (host.endsWith('substack.com')) return 'substack';
     if (host.endsWith('zhihu.com')) return 'zhihu';
+    if (host.endsWith('maimai.cn')) return 'maimai';
     if (host === 'x.com') return 'x';
     if (host.endsWith('twitter.com')) return 'twitter';
     return host ? 'personal_site' : '';
