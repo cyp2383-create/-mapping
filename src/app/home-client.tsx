@@ -93,6 +93,9 @@ type Talent = {
   location?: string;
   level?: string;
   tier?: string;
+  match_path?: string;
+  match_path_label?: string;
+  match_path_reason?: string;
   sources?: SourceItem[];
   match_reasons?: string[];
   verification_needed?: string[];
@@ -140,6 +143,13 @@ const tierCopy: Record<TierKey, { label: string; tone: string; bar: string }> = 
   high: { label: "高匹配", tone: "border-emerald-300/30 bg-emerald-300/10 text-emerald-100", bar: "bg-emerald-300" },
   mid: { label: "可培养", tone: "border-cyan-300/30 bg-cyan-300/10 text-cyan-100", bar: "bg-cyan-300" },
   low: { label: "弱相关", tone: "border-amber-300/30 bg-amber-300/10 text-amber-100", bar: "bg-amber-300" },
+};
+
+const matchPathCopy: Record<string, { label: string; tone: string }> = {
+  ideal: { label: "理想匹配", tone: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100" },
+  function_body_capability_unverified: { label: "职能主体，能力待验证", tone: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100" },
+  capability_body_scenario_unverified: { label: "能力主体，场景待验证", tone: "border-violet-300/25 bg-violet-300/10 text-violet-100" },
+  adjacent_backup: { label: "相邻备选", tone: "border-amber-300/25 bg-amber-300/10 text-amber-100" },
 };
 
 export type { LatestPayload, StreamData };
@@ -606,6 +616,7 @@ function CandidateCard({ talent, index, tier }: { talent: Talent; index: number;
   const sourceLinks = getCandidateSourceLinks(talent);
   const primaryUrl = sourceLinks[0]?.url || "";
   const sourceCount = sourceLinks.length;
+  const matchPath = matchPathCopy[talent.match_path || ""] || (talent.match_path_label ? { label: talent.match_path_label, tone: "border-white/15 bg-white/[0.04] text-slate-200" } : null);
   const profileFields = [
     { label: "层级", value: talent.level },
     { label: "影响力", value: talent.influence_score ? `${talent.influence_score}/10` : "" },
@@ -620,9 +631,12 @@ function CandidateCard({ talent, index, tier }: { talent: Talent; index: number;
     <article className="rounded-lg border border-white/10 bg-black/15 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs text-slate-500">{String(index + 1).padStart(2, "0")}</span>
             <span className={`rounded-full border px-2 py-1 text-xs font-bold ${tierCopy[tier].tone}`}>{tierCopy[tier].label}</span>
+            {matchPath ? (
+              <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${matchPath.tone}`}>{matchPath.label}</span>
+            ) : null}
           </div>
           {primaryUrl ? (
             <a href={primaryUrl} target="_blank" rel="noreferrer" className="group/name inline-flex max-w-full items-center gap-1.5">
@@ -634,6 +648,7 @@ function CandidateCard({ talent, index, tier }: { talent: Talent; index: number;
           )}
           <p className="mt-1 truncate text-sm text-slate-300">{company} · {title}</p>
           <p className="mt-1 text-xs text-slate-500">{location} · 公开资料 {sourceCount} 条</p>
+          {talent.match_path_reason ? <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400">{talent.match_path_reason}</p> : null}
         </div>
         {primaryUrl ? (
           <a href={primaryUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-cyan-300/20 px-2.5 py-1.5 text-xs font-semibold text-cyan-100 hover:border-cyan-200/50">
