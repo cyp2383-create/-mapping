@@ -223,8 +223,8 @@ async function generateTargetedReport(ai, tavily, industry, role, context, send)
   const extraCompanies = analysis.target_companies || [];
   const extraTalents = [];
   for (const c of extraCompanies.slice(0,5)) {
-    const results = await tavily.search(`site:linkedin.com/in/ "${role}" "${c}"`, 2);
-    results.forEach(r => extraTalents.push({...r, company:c}));
+    const results = await searchLinkedInProfilesForCompany(tavily, c, role, 3);
+    results.forEach(r => extraTalents.push(r));
   }
 
   send({step:'report',text:'生成定向人才地图...',progress:60});
@@ -334,10 +334,122 @@ async function searchJDs(tav, companies, role) {
 async function searchLinkedIn(tav, companies, role) {
   const people = [];
   for (const c of companies.slice(0,8)) {
-    const results = await tav.search(`site:linkedin.com/in/ "${role}" "${c.name}"`, 2);
-    results.forEach(r => people.push({...r, company:c.name}));
+    const results = await searchLinkedInProfilesForCompany(tav, c.name, role, 3);
+    results.forEach(r => people.push(r));
   }
-  return people.slice(0,40);
+  return dedupeByProfileUrl(people).slice(0,40);
+}
+
+async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3) {
+  const companyName = normalizeText(getCompanyName(company));
+  const roleName = normalizeText(role);
+  const queries = [
+    `site:linkedin.com/in/ "${roleName}" "${companyName}" -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    `site:linkedin.com/in/ "${companyName}" "${roleName}" "LinkedIn" -jobs -careers -docs -developers -api`,
+  ];
+
+  const collected = [];
+  for (const query of queries) {
+    const results = await tav.search(query, maxResults);
+    collected.push(...filterLinkedInProfileResults(results, companyName, roleName));
+    if (dedupeByProfileUrl(collected).length >= maxResults) break;
+  }
+
+  const strict = dedupeByProfileUrl(collected);
+  if (strict.length) return strict.slice(0, maxResults).map(r => ({...r, company: companyName}));
+
+  // Fallback keeps the hard LinkedIn /in/ profile requirement, but relaxes text matching.
+  const fallback = await tav.search(`site:linkedin.com/in/ "${companyName}" "${roleName}"`, maxResults);
+  return dedupeByProfileUrl(fallback.filter(isLinkedInProfileUrl))
+    .slice(0, maxResults)
+    .map(r => ({...r, company: companyName}));
+}
+
+function filterLinkedInProfileResults(results, company, role) {
+  const roleTokens = extractSearchTokens(role);
+  return results.filter(r => {
+    if (!isLinkedInProfileUrl(r)) return false;
+    if (looksLikeNonPersonResult(r)) return false;
+
+    const text = normalizeText(`${r.title || ''} ${r.snippet || ''}`);
+    const hasCompany = company && includesLoose(text, company);
+    const hasRole = roleTokens.length ? roleTokens.some(token => includesLoose(text, token)) : false;
+    return hasCompany || hasRole;
+  });
+}
+
+function isLinkedInProfileUrl(result) {
+  try {
+    const url = new URL(result?.url || '');
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (!host.endsWith('linkedin.com')) return false;
+    const path = url.pathname.toLowerCase();
+    if (!path.startsWith('/in/')) return false;
+    if (path === '/in/' || path.split('/').filter(Boolean).length < 2) return false;
+    return !/\/(jobs|company|companies|school|learning|pulse|posts|feed|showcase|help|advice)\//i.test(path);
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeNonPersonResult(result) {
+  const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${result?.url || ''}`).toLowerCase();
+  const blocked = [
+    'api documentation', 'documentation', 'docs',
+    'guide', 'guides', 'reference', 'quickstart', 'sdk', 'agent builder',
+    'jobs at', 'careers', 'hiring', 'job posting', '招聘', '职位',
+    'company profile', 'linkedin learning'
+  ];
+  return blocked.some(term => text.includes(term.toLowerCase()));
+}
+
+function dedupeByProfileUrl(results) {
+  const seen = new Set();
+  const unique = [];
+  for (const r of results) {
+    const key = canonicalProfileUrl(r?.url);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push({...r, url:key});
+  }
+  return unique;
+}
+
+function canonicalProfileUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl || '');
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (!host.endsWith('linkedin.com')) return '';
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts[0]?.toLowerCase() !== 'in' || !parts[1]) return '';
+    return `https://www.linkedin.com/in/${parts[1].replace(/\/+$/, '')}`;
+  } catch {
+    return '';
+  }
+}
+
+function extractSearchTokens(value) {
+  return normalizeText(value)
+    .split(/[\s,，/|、()（）-]+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 2 && !['and','or','the','for','with'].includes(t.toLowerCase()))
+    .slice(0, 8);
+}
+
+function normalizeText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function includesLoose(haystack, needle) {
+  const h = normalizeText(haystack).toLowerCase();
+  const n = normalizeText(needle).toLowerCase();
+  return !!n && h.includes(n);
+}
+
+function getCompanyName(company) {
+  if (!company) return '';
+  if (typeof company === 'string') return company;
+  return company.name || company.company || company.company_name || company.title || '';
 }
 
 // ========== Turso helpers ==========
