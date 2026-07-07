@@ -7,7 +7,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "NebulaTalent | 市场人才地图 Agent",
+  title: "NebulaTalent | 市场人才地图Agent",
   description: "输入行业、岗位和区域，Agent 自动搜索市场需求、候选人线索并生成市场人才地图报告。",
 };
 

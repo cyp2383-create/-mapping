@@ -2,16 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bot, Clock3, Database, Menu, Radar, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Clock3, Database, Menu, Radar, Search } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", label: "市场地图", desc: "需求定位与生成", icon: Radar },
-  { href: "/chat", label: "AI 顾问", desc: "问答与画像报告", icon: Bot },
   { href: "/database", label: "人才数据", desc: "候选人与 JD", icon: Database },
-  { href: "/history", label: "历史记录", desc: "报告与播客", icon: Clock3 },
+  { href: "/history", label: "历史记录", desc: "搜索 case 与报告", icon: Clock3 },
 ];
 
 export function AppSidebar() {
@@ -20,10 +18,8 @@ export function AppSidebar() {
   return (
     <>
       <Sheet>
-        <SheetTrigger>
-          <Button variant="ghost" size="icon" className="fixed left-3 top-3 z-50 border border-white/10 bg-black/40 backdrop-blur lg:hidden">
-            <Menu className="h-5 w-5" />
-          </Button>
+        <SheetTrigger className="fixed left-3 top-3 z-50 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-black/40 text-white backdrop-blur transition hover:bg-white/10 lg:hidden">
+          <Menu className="h-5 w-5" />
         </SheetTrigger>
         <SheetContent side="left" className="w-72 border-white/10 bg-slate-950/95 p-4 text-white backdrop-blur-2xl">
           <SidebarContent pathname={pathname} />
@@ -45,7 +41,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
           <span className="grid h-11 w-11 place-items-center rounded-lg bg-cyan-300 font-black text-slate-950 shadow-lg shadow-cyan-950/40">N</span>
           <div>
             <div className="text-sm font-black tracking-tight text-white">NebulaTalent</div>
-            <p className="text-xs text-slate-400">Market Talent Agent</p>
+            <p className="text-xs text-slate-400">市场人才地图Agent</p>
           </div>
         </Link>
       </div>

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  ArrowRight,
   BarChart3,
   BriefcaseBusiness,
   Building2,
@@ -15,12 +14,8 @@ import {
   Link2,
   Loader2,
   MapPin,
-  MessageSquareText,
-  Mic2,
-  Podcast,
   RefreshCw,
   Search,
-  ShieldCheck,
   Sparkles,
   Target,
   Users,
@@ -45,13 +40,33 @@ type StreamData = {
   tier_stats?: TierStats;
   industry?: string;
   role?: string;
+  input?: SearchInput | null;
+  search_sentence?: string;
+  rewritten_intent?: string;
+  search_queries?: string[];
+  company_signals?: SourceItem[];
   report_html?: string;
-  podcast_script?: string | null;
-  _podcastScript?: string;
   _loadedFromTurso?: boolean;
   _sourceName?: string;
   _hasReport?: boolean;
   [key: string]: unknown;
+};
+
+type SearchInput = {
+  business_scene?: string;
+  target_role?: string;
+  core_tasks?: string;
+  location_preference?: string;
+  source_preference?: string;
+};
+
+type SourceItem = {
+  type?: string;
+  platform?: string;
+  title?: string;
+  url?: string;
+  snippet?: string;
+  company?: string;
 };
 
 type Talent = {
@@ -64,7 +79,6 @@ type Talent = {
   source_url?: string;
   contact_type?: string;
   contact_value?: string;
-  confidence?: number;
   education?: string;
   languages?: string;
   certifications?: string;
@@ -72,6 +86,9 @@ type Talent = {
   location?: string;
   level?: string;
   tier?: string;
+  sources?: SourceItem[];
+  match_reasons?: string[];
+  verification_needed?: string[];
 };
 
 type JobDemand = {
@@ -100,15 +117,9 @@ type LatestPayload = {
   detail?: StreamData | null;
 };
 
-type StreamEvent = StreamData & {
-  script?: string;
-};
+type StreamEvent = StreamData;
 
 type StepState = "idle" | "active" | "done";
-
-let podcastLines: Array<{ host: string; text: string }> = [];
-let podcastIdx = 0;
-let podcastPlaying = false;
 
 const stepLabels: Record<string, string> = {
   companies: "生成目标公司池",
@@ -118,12 +129,6 @@ const stepLabels: Record<string, string> = {
   report: "生成结果报告",
 };
 
-const promptExamples = [
-  { industry: "互联网", role: "AI产品经理", city: "北京 / 上海 / 深圳" },
-  { industry: "AI SaaS", role: "产品市场总监", city: "北京" },
-  { industry: "新能源", role: "B2B 市场增长负责人", city: "华东" },
-];
-
 const tierCopy: Record<TierKey, { label: string; tone: string; bar: string }> = {
   high: { label: "高匹配", tone: "border-emerald-300/30 bg-emerald-300/10 text-emerald-100", bar: "bg-emerald-300" },
   mid: { label: "可培养", tone: "border-cyan-300/30 bg-cyan-300/10 text-cyan-100", bar: "bg-cyan-300" },
@@ -132,13 +137,14 @@ const tierCopy: Record<TierKey, { label: string; tone: string; bar: string }> = 
 
 export type { LatestPayload, StreamData };
 
-export default function HomeClient({ initialPayload }: { initialPayload?: LatestPayload | null }) {
+export default function HomeClient({ initialPayload = null }: { initialPayload?: LatestPayload | null } = {}) {
   const initialPosition = initialPayload?.position || null;
   const initialDetail = initialPayload?.detail || null;
 
-  const [industry, setIndustry] = useState(initialDetail?.industry || initialPosition?.industry || "互联网");
-  const [role, setRole] = useState(initialDetail?.role || initialPosition?.role_direction || "AI产品经理");
-  const [city, setCity] = useState("北京 / 上海 / 深圳");
+  const [industry, setIndustry] = useState("");
+  const [role, setRole] = useState("");
+  const [responsibilities, setResponsibilities] = useState("");
+  const [city, setCity] = useState("");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(initialDetail?._hasReport || initialDetail?.report_html ? 100 : 0);
   const [status, setStatus] = useState(
@@ -151,8 +157,6 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
       ? { ...initialDetail, position_id: initialPosition.id, _loadedFromTurso: true, _sourceName: initialPosition.name }
       : null,
   );
-  const [podcasting, setPodcasting] = useState(false);
-  const [podcastStatus, setPodcastStatus] = useState("");
 
   const hasReport = Boolean(data?._hasReport || (data?.report_html && data.report_html.length > 100));
   const talents = useMemo(() => data?.talents || [], [data?.talents]);
@@ -188,7 +192,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
       { label: "候选人线索", value: hasEvidence ? `${talents.length}` : "--", sub: "Turso talents 字段" },
       { label: "招聘/市场信号", value: hasEvidence ? `${jds.length}` : "--", sub: "Tavily/WebSearch 返回样本" },
       { label: "公司覆盖", value: hasEvidence ? `${companies.length}` : "--", sub: "从候选人与 JD 归并" },
-      { label: "报告状态", value: hasReport ? "完成" : running ? `${progress}%` : "待生成", sub: hasReport ? "可查看 / 下载 / 播客" : "等待 Agent 产出" },
+      { label: "报告状态", value: hasReport ? "完成" : running ? `${progress}%` : "待生成", sub: hasReport ? "可查看 / 下载" : "等待 Agent 产出" },
     ],
     [companies.length, hasEvidence, hasReport, jds.length, progress, running, talents.length],
   );
@@ -208,8 +212,8 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
     },
     {
       key: "report",
-      label: "报告与问答",
-      desc: hasReport ? "报告已生成，可继续追问" : data ? "证据数据已准备" : "等待数据",
+      label: "判断报告",
+      desc: hasReport ? "报告已生成，可查看或下载" : data ? "证据数据已准备" : "等待数据",
       state: hasReport ? "done" : running ? "active" : "idle",
     },
   ];
@@ -219,6 +223,14 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
   };
 
   const handleGenerate = async () => {
+    const businessScene = industry.trim();
+    const targetRole = role.trim();
+    if (!businessScene || !targetRole) {
+      setStatus("请先填写必填项：业务场景 / 行业方向、目标角色 / 岗位方向。");
+      setProgress(0);
+      return;
+    }
+
     setRunning(true);
     setProgress(3);
     setData((prev) => (prev ? { ...prev, _loadedFromTurso: false, _hasReport: false, report_html: "" } : null));
@@ -228,7 +240,13 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
       const resp = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industry, role, city }),
+        body: JSON.stringify({
+          industry: businessScene,
+          role: targetRole,
+          responsibilities: responsibilities.trim(),
+          city: city.trim(),
+          source_preference: city.trim(),
+        }),
       });
 
       if (!resp.ok) throw new Error(`Generate failed: ${resp.status}`);
@@ -260,7 +278,7 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             } else if (event.step === "report_ready") {
               updateData({ report_html: event.report_html, _hasReport: Boolean(event.report_html) });
               setProgress(100);
-              setStatus("人才地图报告已生成，可以查看、下载或生成播客。");
+              setStatus("人才地图报告已生成，可以查看或下载。");
             } else if (event.step === "report_progress") {
               setProgress(Math.min(95, event.progress || progress));
               setStatus(`生成报告：${event.text || "正在组织分析内容"}`);
@@ -318,118 +336,6 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
     URL.revokeObjectURL(anchor.href);
   };
 
-  const togglePodcast = async () => {
-    if (podcastPlaying) {
-      speechSynthesis.cancel();
-      podcastPlaying = false;
-      setPodcasting(false);
-      setPodcastStatus("");
-      return;
-    }
-    const currentData = data;
-    if (!hasReport || !currentData) return;
-
-    setPodcasting(true);
-    setPodcastStatus("生成播客脚本...");
-
-    try {
-      const reportHtml = await ensureReportHtml();
-      if (!reportHtml) {
-        setPodcasting(false);
-        setPodcastStatus("报告为空");
-        return;
-      }
-
-      if (!currentData._podcastScript) {
-        const resp = await fetch("/api/podcast", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ report_html: reportHtml }),
-        });
-        const reader = resp.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let script = "";
-
-        while (reader) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const event = JSON.parse(line.slice(6)) as StreamEvent;
-              if (event.step === "done") script = event.script || "";
-              if (event.step === "progress") setPodcastStatus(event.text || "生成中...");
-            } catch {}
-          }
-        }
-        updateData({ _podcastScript: script });
-        localStorage.setItem("talent_miner_podcast", script);
-        fetch("/api/save-report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ position_id: currentData.position_id || 0, podcast_script: script }),
-        }).catch(() => {});
-      }
-
-      const script = currentData._podcastScript || localStorage.getItem("talent_miner_podcast") || "";
-      podcastLines = [];
-      script.split("\n").forEach((line: string) => {
-        const match = line.trim().match(/【(小研|小诺)】(.*)/);
-        if (match) podcastLines.push({ host: match[1], text: match[2].trim() });
-      });
-
-      if (!podcastLines.length) {
-        setPodcasting(false);
-        setPodcastStatus("脚本为空");
-        return;
-      }
-
-      podcastIdx = 0;
-      podcastPlaying = true;
-      setPodcastStatus("播放中...");
-
-      const speak = () => {
-        if (!podcastPlaying || podcastIdx >= podcastLines.length) {
-          podcastPlaying = false;
-          setPodcasting(false);
-          setPodcastStatus("播放完成");
-          return;
-        }
-
-        const line = podcastLines[podcastIdx];
-        const utterance = new SpeechSynthesisUtterance(line.text);
-        utterance.lang = "zh-CN";
-        utterance.rate = line.host === "小研" ? 1 : 1.08;
-        utterance.pitch = line.host === "小研" ? 1.15 : 1.05;
-        const voices = speechSynthesis.getVoices().filter((voice) => voice.lang.startsWith("zh"));
-        if (voices.length >= 2) {
-          utterance.voice =
-            line.host === "小研"
-              ? voices.find((voice) => voice.name.includes("Xiaoxiao")) || voices[0]
-              : voices.find((voice) => voice.name.includes("Yunxi") || voice.name.includes("Yunjian")) || voices[1];
-        }
-        utterance.onend = () => {
-          podcastIdx += 1;
-          speak();
-        };
-        utterance.onerror = () => {
-          podcastIdx += 1;
-          speak();
-        };
-        speechSynthesis.speak(utterance);
-      };
-
-      speak();
-    } catch {
-      setPodcasting(false);
-      setPodcastStatus("播客生成失败");
-    }
-  };
-
   return (
     <div className="relative min-h-full overflow-hidden bg-[linear-gradient(135deg,rgba(15,23,42,.96),rgba(2,6,23,.98)_48%,rgba(20,36,32,.96))] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 -z-0 bg-[linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.03)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_82%)]" />
@@ -442,42 +348,29 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
               Market Talent Intelligence
             </div>
             <h1 className="whitespace-nowrap text-[2rem] font-black leading-none tracking-tight text-white sm:text-5xl xl:text-[3.35rem]">
-              AI 市场人才地图
+              市场人才地图Agent
             </h1>
             <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300 sm:text-lg">
-              用 Agent 把招聘需求、目标公司、候选人线索和报告问答串成一张可核验的人才情报工作台。
+              用 Agent 把模糊招聘需求改写成专业搜索策略，找到候选人、定位来源公司，并判断人才水平。
             </p>
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-[1fr_1fr_.75fr_auto]">
-              <Field label="行业">
-                <Input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="如：互联网" className="h-11 bg-black/20" />
+            <div className="mt-7 grid gap-3 lg:grid-cols-2">
+              <Field label="业务场景 / 行业方向" required>
+                <Input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="如：AI Agent、跨境 SaaS、内容电商" className="h-11 bg-black/20" />
               </Field>
-              <Field label="岗位方向">
-                <Input value={role} onChange={(event) => setRole(event.target.value)} placeholder="如：AI产品经理" className="h-11 bg-black/20" />
+              <Field label="目标角色 / 岗位方向" required>
+                <Input value={role} onChange={(event) => setRole(event.target.value)} placeholder="如：产品负责人、增长负责人、市场负责人" className="h-11 bg-black/20" />
               </Field>
-              <Field label="区域">
-                <Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="可选" className="h-11 bg-black/20" />
+              <Field label="核心任务 / 职责关键词">
+                <Input value={responsibilities} onChange={(event) => setResponsibilities(event.target.value)} placeholder="如：0-1 商业化、GTM、获客增长" className="h-11 bg-black/20" />
               </Field>
-              <Button onClick={handleGenerate} disabled={running} className="mt-5 h-11 gap-2 bg-cyan-300 text-slate-950 hover:bg-cyan-200">
+              <Field label="地区 / 来源偏好">
+                <Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="如：北京 / 上海，优先大厂或 AI 创业公司" className="h-11 bg-black/20" />
+              </Field>
+              <Button onClick={handleGenerate} disabled={running} className="h-11 gap-2 bg-cyan-300 text-slate-950 hover:bg-cyan-200 lg:col-span-2">
                 {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 {running ? "生成中" : "生成地图"}
               </Button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {promptExamples.map((item) => (
-                <button
-                  key={`${item.industry}-${item.role}`}
-                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-300 transition hover:border-cyan-300/40 hover:text-white"
-                  onClick={() => {
-                    setIndustry(item.industry);
-                    setRole(item.role);
-                    setCity(item.city);
-                  }}
-                >
-                  {item.industry} · {item.role}
-                </button>
-              ))}
             </div>
 
             <div className="mt-6 space-y-3">
@@ -486,6 +379,36 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
                 <span className="font-mono text-cyan-200">{progress}%</span>
               </div>
               <Progress value={progress} className="h-2" />
+            </div>
+
+            <div className="mt-4 rounded-lg border border-white/10 bg-black/15 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-200">Agent Pipeline</p>
+                  <h2 className="mt-0.5 text-base font-bold text-white">运行链路</h2>
+                </div>
+                {data?.position_id && (
+                  <Link href={`/database?position_id=${data.position_id}`} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-200 hover:border-cyan-300/40">
+                    <Database className="h-3.5 w-3.5" />
+                    查看数据源
+                  </Link>
+                )}
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                {steps.map((step, index) => (
+                  <div key={step.key} className={`rounded-lg border px-3 py-2 ${step.state === "done" ? "border-emerald-300/25 bg-emerald-300/8" : step.state === "active" ? "border-cyan-300/30 bg-cyan-300/8" : "border-white/10 bg-black/10"}`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md text-xs font-black ${step.state === "done" ? "bg-emerald-300 text-slate-950" : step.state === "active" ? "bg-cyan-300 text-slate-950" : "bg-white/8 text-slate-400"}`}>
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-semibold text-white">{step.label}</h3>
+                        <p className="truncate text-[11px] text-slate-400">{step.desc}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -497,36 +420,6 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
                 <span className="mt-2 block text-xs text-cyan-200">{metric.sub}</span>
               </div>
             ))}
-          </div>
-
-          <div className="min-h-[405px] rounded-lg border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Agent Pipeline</p>
-                <h2 className="mt-1 text-xl font-bold text-white">运行链路</h2>
-              </div>
-              {data?.position_id && (
-                <Link href={`/database?position_id=${data.position_id}`} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200 hover:border-cyan-300/40">
-                  <Database className="h-4 w-4" />
-                  查看数据源
-                </Link>
-              )}
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              {steps.map((step, index) => (
-                <div key={step.key} className={`rounded-lg border p-4 ${step.state === "done" ? "border-emerald-300/25 bg-emerald-300/8" : step.state === "active" ? "border-cyan-300/30 bg-cyan-300/8" : "border-white/10 bg-black/10"}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-sm font-black ${step.state === "done" ? "bg-emerald-300 text-slate-950" : step.state === "active" ? "bg-cyan-300 text-slate-950" : "bg-white/8 text-slate-400"}`}>
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-white">{step.label}</h3>
-                      <p className="truncate text-xs text-slate-400">{step.desc}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
         </div>
@@ -544,18 +437,6 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             </div>
 
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
-              <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-                <div className="flex items-start gap-3">
-                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-200" />
-                  <div>
-                    <p className="text-sm font-semibold text-white">不再使用模拟热力图</p>
-                    <p className="mt-1 text-sm leading-6 text-slate-400">
-                      当前面板只展示 API 实际返回的候选人、JD/网页信号、公司、分层、来源链接和报告状态。
-                    </p>
-                  </div>
-                </div>
-              </div>
-
               <div>
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-sm font-semibold text-white">人才分层</p>
@@ -639,34 +520,13 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             <Users className="h-5 w-5 text-cyan-200" />
           </div>
           {talents.length ? (
-            <div className="overflow-x-auto">
-              <div className="min-w-[760px] space-y-2">
-                {talents.slice(0, 6).map((talent, index) => {
-                  const tier = normalizeTier(talent.tier);
-                  return (
-                    <div key={`${talent.name || "talent"}-${index}`} className="grid grid-cols-[42px_minmax(180px,1fr)_minmax(220px,1.35fr)_110px_80px] items-center gap-3 rounded-lg border border-white/10 bg-black/15 px-3 py-3">
-                      <span className="font-mono text-xs text-slate-500">{String(index + 1).padStart(2, "0")}</span>
-                      <div className="min-w-0">
-                        <strong className="block truncate text-sm text-white">{cleanText(talent.name, "候选人线索")}</strong>
-                        <p className="truncate text-xs text-slate-400">{cleanText(talent.location, "地点未标注")}</p>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-slate-200">{cleanText(talent.current_company || talent.company, "公司未标注")}</p>
-                        <p className="truncate text-xs text-slate-500">{cleanText(talent.current_title || talent.title, "职位未标注")}</p>
-                      </div>
-                      <span className={`w-fit rounded-full border px-2 py-1 text-xs font-bold ${tierCopy[tier].tone}`}>{tierCopy[tier].label}</span>
-                      {talent.source_url ? (
-                        <a href={talent.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-100 hover:text-cyan-50">
-                          来源
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-slate-500">无链接</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {talents.map((talent, index) => {
+                const tier = normalizeTier(talent.tier);
+                return (
+                  <CandidateCard key={`${talent.source_url || talent.name || "talent"}-${index}`} talent={talent} index={index} tier={tier} />
+                );
+              })}
             </div>
           ) : (
             <EmptyState text="还没有候选人数据。生成后这里会展示 Turso talents 数组中的真实线索。" />
@@ -683,19 +543,9 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             </div>
             <p className="text-sm leading-7 text-slate-300">
               {hasReport
-                ? "报告已生成。你可以直接打开 HTML 报告、下载留档，或生成双人播客脚本用于汇报。"
-                : "生成完成后，这里会出现可查看、可下载、可播客化的市场人才地图报告。"}
+                ? "报告已生成。你可以直接打开 HTML 报告或下载留档，用来回答该找谁、去哪找、怎么判断候选人水平。"
+                : "生成完成后，这里会出现可查看、可下载的市场人才地图报告。"}
             </p>
-            {data?.questions?.length ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {data.questions.slice(0, 3).map((question) => (
-                  <span key={question} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/15 px-3 py-1.5 text-xs text-slate-300">
-                    <MessageSquareText className="h-3 w-3 text-cyan-200" />
-                    {question}
-                  </span>
-                ))}
-              </div>
-            ) : null}
             <div className="mt-4 flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={openReport} disabled={!hasReport} className="gap-2 border-white/10">
                 <Eye className="h-3.5 w-3.5" />
@@ -709,25 +559,20 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
                 <RefreshCw className="h-3.5 w-3.5" />
                 重新生成
               </Button>
-              <Button variant="outline" size="sm" onClick={togglePodcast} disabled={!hasReport || podcasting} className="gap-2 border-cyan-300/20 text-cyan-100">
-                {podcasting ? <Mic2 className="h-3.5 w-3.5 animate-pulse" /> : <Podcast className="h-3.5 w-3.5" />}
-                {podcasting ? podcastStatus || "播客中" : "播客"}
-              </Button>
             </div>
-            <Link href="/chat" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-cyan-100 hover:text-cyan-50">
-              和猎头顾问继续讨论
-              <ArrowRight className="h-4 w-4" />
-            </Link>
           </div>
       </section>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, required = false }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <label className="space-y-1.5">
-      <span className="block text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{label}</span>
+      <span className="block text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+        {label}
+        {required ? <span className="ml-1 text-cyan-200">*</span> : null}
+      </span>
       {children}
     </label>
   );
@@ -744,6 +589,149 @@ function InfoCard({ icon, label, value, desc }: { icon: React.ReactNode; label: 
       <span className="mt-2 block text-xs leading-5 text-slate-400">{desc}</span>
     </div>
   );
+}
+
+function CandidateCard({ talent, index, tier }: { talent: Talent; index: number; tier: TierKey }) {
+  const displayName = deriveCandidateName(talent, index);
+  const company = cleanText(talent.current_company || talent.company, "公司未标注");
+  const title = cleanText(talent.current_title || talent.title, "职位未标注");
+  const location = cleanText(talent.location, "地点未标注");
+  const primaryUrl = getCandidatePrimaryUrl(talent);
+  const sourceCount = talent.sources?.length || (talent.source_url ? 1 : 0);
+  const profileFields = [
+    { label: "层级", value: talent.level },
+    { label: "影响力", value: talent.influence_score ? `${talent.influence_score}/10` : "" },
+    { label: "平台", value: talent.source_platform },
+    { label: "联系", value: talent.contact_type },
+    { label: "教育", value: talent.education },
+    { label: "语言", value: talent.languages },
+    { label: "证书", value: talent.certifications },
+  ].filter((item) => cleanText(item.value, "") !== "");
+
+  return (
+    <article className="rounded-lg border border-white/10 bg-black/15 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="font-mono text-xs text-slate-500">{String(index + 1).padStart(2, "0")}</span>
+            <span className={`rounded-full border px-2 py-1 text-xs font-bold ${tierCopy[tier].tone}`}>{tierCopy[tier].label}</span>
+          </div>
+          {primaryUrl ? (
+            <a href={primaryUrl} target="_blank" rel="noreferrer" className="group/name inline-flex max-w-full items-center gap-1.5">
+              <h3 className="truncate text-base font-bold text-white group-hover/name:text-cyan-100">{displayName}</h3>
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-cyan-200" />
+            </a>
+          ) : (
+            <h3 className="truncate text-base font-bold text-white">{displayName}</h3>
+          )}
+          <p className="mt-1 truncate text-sm text-slate-300">{company} · {title}</p>
+          <p className="mt-1 text-xs text-slate-500">{location} · 证据 {sourceCount} 条</p>
+        </div>
+        {primaryUrl ? (
+          <a href={primaryUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-cyan-300/20 px-2.5 py-1.5 text-xs font-semibold text-cyan-100 hover:border-cyan-200/50">
+            主来源
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : null}
+      </div>
+
+      {profileFields.length ? (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {profileFields.slice(0, 8).map((field) => (
+            <div key={field.label} className="rounded-md border border-white/10 bg-white/[0.035] px-3 py-2">
+              <p className="text-[11px] text-slate-500">{field.label}</p>
+              <p className="mt-1 truncate text-xs text-slate-300">{cleanText(field.value, "-")}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <CandidateList title="匹配理由" items={talent.match_reasons} />
+      <CandidateList title="待验证" items={talent.verification_needed} />
+
+      {talent.sources?.length ? (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold text-slate-300">证据来源</p>
+          <div className="grid gap-2">
+            {talent.sources.slice(0, 4).map((source, sourceIndex) => (
+              <a key={`${source.url || source.title || sourceIndex}`} href={source.url || "#"} target="_blank" rel="noreferrer" className="rounded-md border border-white/10 bg-white/[0.03] p-2 text-xs transition hover:border-cyan-300/30">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate font-semibold text-slate-200">{cleanText(source.title, source.type || "来源")}</span>
+                  <span className="shrink-0 text-cyan-100">{cleanText(source.platform || source.type, "web")}</span>
+                </div>
+                {source.snippet ? <p className="mt-1 overflow-hidden leading-5 text-slate-500 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{excerpt(source.snippet, "")}</p> : null}
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function CandidateList({ title, items }: { title: string; items?: string[] }) {
+  const visible = (items || []).filter(Boolean).slice(0, 4);
+  if (!visible.length) return null;
+  return (
+    <div className="mt-4">
+      <p className="mb-2 text-xs font-semibold text-slate-300">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {visible.map((item) => <Chip key={`${title}-${item}`}>{item}</Chip>)}
+      </div>
+    </div>
+  );
+}
+
+function getCandidatePrimaryUrl(talent: Talent) {
+  if (isHttpUrl(talent.source_url)) return talent.source_url;
+  const personProfile = talent.sources?.find((source) => source.type === "person_profile" && isHttpUrl(source.url));
+  if (personProfile?.url) return personProfile.url;
+  const firstSource = talent.sources?.find((source) => isHttpUrl(source.url));
+  return firstSource?.url || "";
+}
+
+function deriveCandidateName(talent: Talent, index: number) {
+  const candidates = [
+    talent.name,
+    extractNameFromLinkedInTitle(talent.title),
+    extractNameFromLinkedInTitle(talent.current_title),
+    extractNameFromLinkedInUrl(talent.source_url),
+  ];
+  const name = candidates.map((item) => cleanText(item, "")).find(isLikelyDisplayName);
+  return name || `姓名待确认 #${String(index + 1).padStart(2, "0")}`;
+}
+
+function extractNameFromLinkedInTitle(value?: string) {
+  const raw = cleanText(value, "")
+    .replace(/\s*\|\s*LinkedIn.*$/i, "")
+    .replace(/\s+on LinkedIn.*$/i, "");
+  const firstPart = raw.split(/\s+-\s+/).map((item) => item.trim()).filter(Boolean)[0] || "";
+  return firstPart;
+}
+
+function extractNameFromLinkedInUrl(value?: string) {
+  const match = cleanText(value, "").match(/linkedin\.com\/in\/([^/?#]+)/i);
+  if (!match) return "";
+  const slug = decodeURIComponent(match[1])
+    .replace(/[-_]+/g, " ")
+    .replace(/\b[0-9a-f]{6,}\b/gi, "")
+    .replace(/\d+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!isLikelyDisplayName(slug)) return "";
+  return slug.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isLikelyDisplayName(value?: string) {
+  const text = cleanText(value, "");
+  if (!text || text.length < 2 || text.length > 60) return false;
+  if (/候选人线索|姓名待确认|linkedin|profile|profiles|login|招聘|职位|公司|company|jobs|careers|official|unknown|undefined|null/i.test(text)) return false;
+  if (/^[^a-zA-Z\u4e00-\u9fa5]+$/.test(text)) return false;
+  return true;
+}
+
+function isHttpUrl(value?: string) {
+  return /^https?:\/\//i.test(cleanText(value, ""));
 }
 
 function EvidenceGroup({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
