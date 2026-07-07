@@ -614,15 +614,14 @@ function isAvoidedExactRole(term, roleDecomposition) {
 }
 
 function buildGeneralJDSearchQuery(role, searchIntent) {
-  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 2).join(' ');
+  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 1).join(' ');
   const locationTerms = buildSimpleJDLocationTerms(searchIntent).slice(0, 1).join(' ');
-  const industryTerms = buildSimpleJDIndustryTerms(searchIntent).slice(0, 2).join(' ');
   const siteScope = hasChinaLocationPreference(searchIntent) ? 'site:liepin.com/job' : '';
-  return normalizeText(`${siteScope} ${roleTerms} ${locationTerms} ${industryTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+  return normalizeText(`${siteScope} ${roleTerms} ${locationTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
 }
 
 function buildCompanyJDSearchQuery(company, role, searchIntent) {
-  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 2).join(' ');
+  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 1).join(' ');
   const locationTerms = buildSimpleJDLocationTerms(searchIntent).slice(0, 1).join(' ');
   return normalizeText(`${company} ${roleTerms} ${locationTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
 }
@@ -630,14 +629,8 @@ function buildCompanyJDSearchQuery(company, role, searchIntent) {
 function buildBroaderJDSearchQuery(role, searchIntent, companies) {
   const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 3).join(' ');
   const locationTerms = buildSimpleJDLocationTerms(searchIntent).slice(0, 1).join(' ');
-  const companyTerms = companies
-    .slice(0, 4)
-    .map(c => normalizeText(getCompanyName(c)))
-    .filter(Boolean)
-    .join(' ');
-  const industryTerms = buildSimpleJDIndustryTerms(searchIntent).slice(0, 2).join(' ');
   const siteScope = hasChinaLocationPreference(searchIntent) ? 'site:liepin.com/job' : '';
-  return normalizeText(`${siteScope} ${roleTerms} ${locationTerms} ${industryTerms} ${companyTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+  return normalizeText(`${siteScope} ${roleTerms} ${locationTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
 }
 
 function buildJDIndustryTerms(searchIntent) {
@@ -679,7 +672,9 @@ function buildSimpleJDRoleTerms(role, searchIntent) {
     .filter(isUsefulProfileRoleTerm)
     .filter(isUsefulJDRoleTerm);
   const preferred = roleTerms.filter(term => /[\u4e00-\u9fa5]/.test(term) || /People Analytics|GTM|RevOps|SalesOps|Customer Success|MLOps|FP&A/i.test(term));
-  return unique([...preferred, ...roleTerms]).slice(0, 8);
+  return unique([...preferred, ...roleTerms])
+    .sort((a, b) => Number(!/[\u4e00-\u9fa5]/.test(a)) - Number(!/[\u4e00-\u9fa5]/.test(b)))
+    .slice(0, 8);
 }
 
 function parseLooseJson(text) {
@@ -764,7 +759,7 @@ ${domesticInstruction}
 async function searchJDs(tav, companies, role, searchIntent) {
   const jds = [];
   const generalQuery = buildGeneralJDSearchQuery(role, searchIntent);
-  const generalResults = await tav.search(generalQuery, 6);
+  const generalResults = await tav.search(generalQuery, 8);
   filterJDResults(generalResults, '', role, searchIntent)
     .forEach(r => jds.push({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: generalQuery}));
   for (const c of companies.slice(0,4)) {
