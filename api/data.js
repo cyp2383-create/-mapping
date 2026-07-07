@@ -47,12 +47,17 @@ export default async function handler(req, res) {
     if (!rows.length) return res.json({ talents: [], jds: [] });
     const obj = {};
     cols.forEach((c,i) => { try { obj[c] = rows[0][i]?.value; } catch {} });
-    let talents=[], jds=[], industry='', role='';
+    let talents=[], jds=[], industry='', role='', input=null, search_sentence='', rewritten_intent='', search_queries=[], company_signals=[];
     try {
       const raw = JSON.parse(obj.talent_data||'[]');
       if (raw && raw._industry) {
         industry = raw._industry;
         role = raw._role || '';
+        input = raw.input || null;
+        search_sentence = raw.search_sentence || '';
+        rewritten_intent = raw.rewritten_intent || '';
+        search_queries = raw.search_queries || [];
+        company_signals = raw.company_signals || [];
         talents = raw.data || raw;
       } else {
         talents = raw;
@@ -95,7 +100,7 @@ export default async function handler(req, res) {
     });
     const companies = [...new Set(talents.map(t => t.current_company).filter(Boolean))];
     const questions = ['描述我的业务场景,帮我构建人才画像','从哪家公司挖人最适合我的业务?','这些大厂在AI方面有什么动向?'];
-    res.json({ talents, jds, industry, role, report_html, chat_report, podcast_script, tier_stats, companies, questions });
+    res.json({ talents, jds, industry, role, input, search_sentence, rewritten_intent, search_queries, company_signals, report_html, chat_report, podcast_script, tier_stats, companies, questions });
     return;
   }
 
