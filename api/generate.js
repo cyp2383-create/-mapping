@@ -185,6 +185,7 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
       input: searchInput,
       search_sentence: searchIntent.search_sentence,
       rewritten_intent: searchIntent.rewritten_intent,
+      role_decomposition: searchIntent.role_decomposition,
       search_queries: searchIntent.search_queries,
       company_signals: companySignals
     }) || 0;
@@ -198,6 +199,7 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
     input: searchInput,
     search_sentence: searchIntent.search_sentence,
     rewritten_intent: searchIntent.rewritten_intent,
+    role_decomposition: searchIntent.role_decomposition,
     search_queries: searchIntent.search_queries,
     company_signals: companySignals,
     questions:["我该优先找哪类人?","从哪家公司挖人最适合?","怎么判断候选人水平?"],
@@ -362,6 +364,7 @@ async function buildSearchIntent(ai, input) {
 重要规则:
 - 如果用户输入的是新兴/复合岗位名，不能把它当作市场已有的标准 title 直接搜索。
 - 要拆成「成熟岗位主体 + 新能力/场景修饰」。例如 "OD AI Builder" 应改写为 "具备 AI building / AI工具构建 / AI应用落地能力的 OD/组织发展/People Analytics/HR数字化人才"。
+- 这不是只针对 OD AI Builder。你必须主动判断任何目标角色是否存在类似问题，例如 "AI GTM Architect"、"增长 Agent Builder"、"HR Copilot Owner"、"LLM RevOps" 等，都要拆成成熟岗位主体和能力修饰。
 - candidate_queries 要搜索真实候选人画像，而不是搜索这个新岗位 title 是否存在。
 - JD/company 查询可以保留市场信号，但候选人查询必须优先找具备相邻能力的人。
 
@@ -369,6 +372,13 @@ async function buildSearchIntent(ai, input) {
 {
   "search_sentence": "把四个用户输入合成一句给搜索 API 使用的中文搜索句, 必须包含业务场景、目标角色、核心任务、地区/来源偏好",
   "rewritten_intent": "一句专业搜索意图, 说明要找什么人、服务什么业务、优先什么来源",
+  "role_decomposition": {
+    "is_standard_title": false,
+    "search_role": "成熟岗位主体，不要包含新兴能力词",
+    "capability_keywords": ["能力/工具/场景修饰词"],
+    "avoid_as_exact_title": ["不要当作精确title搜索的新兴复合词"],
+    "reason": "为什么这样拆"
+  },
   "role_keywords": ["中英文角色关键词"],
   "candidate_queries": ["用于搜索人的 query, 3-5条"],
   "jd_queries": ["用于搜索岗位/JD/市场要求的 query, 2-3条"],
@@ -378,21 +388,43 @@ async function buildSearchIntent(ai, input) {
   try {
     const text = await ai.chat(prompt, 1200);
     const parsed = parseLooseJson(text);
+    const roleDecomposition = normalizeRoleDecomposition(parsed.role_decomposition, fallback.role_decomposition, input);
+    const searchSentence = rewriteEmergingSearchSentence(
+      normalizeText(parsed.search_sentence) || fallback.search_sentence,
+      input,
+      roleDecomposition
+    );
+    const rewrittenIntent = rewriteEmergingSearchSentence(
+      normalizeText(parsed.rewritten_intent) || fallback.rewritten_intent,
+      input,
+      roleDecomposition
+    );
+    const generatedCandidateQueries = buildCandidateQueriesFromDecomposition(input, roleDecomposition);
+    const candidateQueries = unique([
+      ...generatedCandidateQueries,
+      ...(Array.isArray(parsed.candidate_queries) ? parsed.candidate_queries.map(query => rewriteEmergingSearchSentence(query, input, roleDecomposition)) : []),
+      ...(fallback.candidate_queries || [])
+    ]).slice(0, 5);
     const searchQueries = [
-      ...(parsed.candidate_queries || []),
+      ...candidateQueries,
       ...(parsed.jd_queries || []),
       ...(parsed.company_queries || [])
     ].map(normalizeText).filter(Boolean);
     return {
       ...fallback,
       ...parsed,
-      search_sentence: normalizeText(parsed.search_sentence) || fallback.search_sentence,
-      rewritten_intent: normalizeText(parsed.rewritten_intent) || fallback.rewritten_intent,
+      search_sentence: searchSentence,
+      rewritten_intent: rewrittenIntent,
+      role_decomposition: roleDecomposition,
       role_keywords: unique([
+        roleDecomposition.search_role,
+        ...(roleDecomposition.role_keywords || []),
+        ...(roleDecomposition.capability_keywords || []),
         ...(Array.isArray(parsed.role_keywords) ? parsed.role_keywords.map(normalizeText).filter(Boolean) : []),
         ...(fallback.role_keywords || [])
-      ]).slice(0, 12),
-      candidate_queries: Array.isArray(parsed.candidate_queries) ? parsed.candidate_queries.map(normalizeText).filter(Boolean).slice(0, 5) : fallback.candidate_queries,
+      ].filter(term => !isAvoidedExactRole(term, roleDecomposition))).slice(0, 16),
+      capability_keywords: roleDecomposition.capability_keywords || [],
+      candidate_queries: candidateQueries,
       jd_queries: Array.isArray(parsed.jd_queries) ? parsed.jd_queries.map(normalizeText).filter(Boolean).slice(0, 4) : fallback.jd_queries,
       company_queries: Array.isArray(parsed.company_queries) ? parsed.company_queries.map(normalizeText).filter(Boolean).slice(0, 4) : fallback.company_queries,
       location_terms: getPreferredLocationTerms(`${input.location_preference || ''} ${input.source_preference || ''}`),
@@ -411,11 +443,7 @@ function buildFallbackSearchIntent(input) {
   const rewritten = `搜索${input.business_scene}方向中${roleConcept.rewritten_role}${task}${place}，重点识别候选人公开资料、来源公司、岗位要求和能力水平。`;
   const roleKeywords = roleConcept.role_keywords.length ? roleConcept.role_keywords : extractSearchTokens(`${input.target_role} ${input.core_tasks}`).slice(0, 8);
   const base = `${input.business_scene} ${roleConcept.search_role} ${roleConcept.capability_keywords.join(' ')} ${input.core_tasks} ${input.location_preference}`.trim();
-  const candidateQueries = [
-    `site:linkedin.com/in ${base}`,
-    `${base} GitHub Medium Substack 知乎 个人主页`,
-    `${roleConcept.search_role} ${roleConcept.capability_keywords.join(' ')} 候选人 公开资料`
-  ].map(normalizeText);
+  const candidateQueries = buildCandidateQueriesFromDecomposition(input, roleConcept);
   const jdQueries = [
     `${base} 招聘 JD 岗位职责`,
     `${input.business_scene} ${roleConcept.search_role} job description responsibilities`
@@ -427,7 +455,9 @@ function buildFallbackSearchIntent(input) {
   return {
     search_sentence: searchSentence,
     rewritten_intent: rewritten,
+    role_decomposition: roleConcept,
     role_keywords: roleKeywords.length ? roleKeywords : [input.target_role],
+    capability_keywords: roleConcept.capability_keywords,
     candidate_queries: candidateQueries,
     jd_queries: jdQueries,
     company_queries: companyQueries,
@@ -437,21 +467,138 @@ function buildFallbackSearchIntent(input) {
 }
 
 function expandEmergingRoleConcept(role, tasks = '') {
+  const rawRole = normalizeText(role);
   const text = normalizeText(`${role} ${tasks}`);
-  if (/(OD|组织发展|組織發展|Organization Development|Organizational Development)/i.test(text) && /(AI Builder|AI building|AI工具|AI 工具|AI应用|AI 应用|智能体|Agent|自动化)/i.test(text)) {
+  const roleCapabilityKeywords = detectEmergingCapabilityKeywords(rawRole);
+  const capabilityKeywords = detectEmergingCapabilityKeywords(text);
+  const family = detectMatureRoleFamily(rawRole) || (roleCapabilityKeywords.length ? detectMatureRoleFamily(text) : null);
+  const isStandardAiTitle = /(?:AI|人工智能|机器学习|Machine Learning|ML|算法|Algorithm|大模型|LLM)?\s*(?:算法|Algorithm|Machine Learning|ML|数据科学|Data Science)?\s*(?:工程师|Engineer|Scientist|研究员|产品经理|Product Manager|PM)/i.test(rawRole)
+    && !/(Builder|building|Agent|智能体|Copilot|Owner|Architect|架构师|自动化|Automation|落地|应用构建)/i.test(rawRole);
+  const hasCompositeSignal = roleCapabilityKeywords.length && (family || /(Builder|building|Agent|智能体|Copilot|Owner|Architect|架构师|自动化|Automation|落地|应用构建|数字化)/i.test(rawRole));
+  if (hasCompositeSignal && !isStandardAiTitle) {
+    const strippedRole = stripEmergingCapabilityTerms(rawRole);
+    const searchRole = family?.search_role || strippedRole || rawRole;
+    const roleKeywords = unique([...(family?.keywords || []), ...extractSearchTokens(searchRole)]).slice(0, 12);
+    const capabilities = unique([
+      ...capabilityKeywords,
+      ...(family?.capability_keywords || []),
+      ...extractSearchTokens(tasks).filter(token => /(AI|智能体|Agent|Copilot|LLM|大模型|自动化|数字化|数据|工具|应用|building|builder)/i.test(token))
+    ]).slice(0, 10);
     return {
-      search_role: 'OD 组织发展 People Analytics HR数字化 人才发展 组织效能',
-      rewritten_role: '具备 AI building、AI工具构建、智能体应用落地或HR数字化能力的 OD/组织发展/People Analytics 人才',
-      role_keywords: ['OD', '组织发展', 'Organization Development', 'People Analytics', 'HR数字化', '人才发展', '组织效能', 'AI Builder', 'AI工具', '智能体', 'AI应用落地'],
-      capability_keywords: ['AI Builder', 'AI building', 'AI工具构建', '智能体', 'AI应用落地', 'HR数字化', 'People Analytics'],
+      is_standard_title: false,
+      search_role: searchRole,
+      rewritten_role: `具备${capabilities.slice(0, 5).join('、')}能力的 ${searchRole} 人才`,
+      role_keywords: roleKeywords,
+      capability_keywords: capabilities,
+      avoid_as_exact_title: unique([rawRole]).filter(Boolean),
+      reason: '目标岗位包含新兴能力词和成熟职能，应拆成成熟岗位主体与能力修饰词搜索候选人画像。',
     };
   }
   return {
-    search_role: normalizeText(role),
-    rewritten_role: normalizeText(role),
-    role_keywords: [],
+    is_standard_title: true,
+    search_role: rawRole,
+    rewritten_role: rawRole,
+    role_keywords: extractSearchTokens(rawRole).slice(0, 6),
     capability_keywords: extractSearchTokens(tasks).slice(0, 6),
+    avoid_as_exact_title: [],
+    reason: '目标岗位更像标准市场 title，按原岗位方向搜索。',
   };
+}
+
+function detectEmergingCapabilityKeywords(text) {
+  const rules = [
+    [/\bAI\b|人工智能/i, ['AI']],
+    [/AI\s*Builder|AI\s*building|AI工具|AI 工具|AI应用|AI 应用|AI落地|AI 落地|AI原生|AI 原生/i, ['AI Builder', 'AI工具构建', 'AI应用落地']],
+    [/智能体|Agent|Agents/i, ['智能体', 'Agent']],
+    [/Copilot|副驾驶/i, ['Copilot']],
+    [/LLM|大模型|生成式AI|Generative AI|AIGC/i, ['LLM', '大模型', '生成式AI']],
+    [/自动化|Automation|RPA|工作流|workflow/i, ['自动化', '工作流']],
+    [/数字化|Digital|数据驱动|Data-driven|People Analytics|Analytics/i, ['数字化', '数据分析']],
+    [/Builder|building|构建|搭建|开发|应用开发/i, ['工具构建', '应用开发']]
+  ];
+  return unique(rules.flatMap(([regex, values]) => regex.test(text) ? values : []));
+}
+
+function detectMatureRoleFamily(text) {
+  const families = [
+    { regex: /(^|[\s/|,，、()（）-])OD($|[\s/|,，、()（）-])|组织发展|組織發展|Organization Development|Organizational Development|组织效能|人才发展|People Analytics/i, search_role: 'OD 组织发展 People Analytics HR数字化 人才发展 组织效能', keywords: ['OD', '组织发展', 'Organization Development', 'People Analytics', 'HR数字化', '人才发展', '组织效能'], capability_keywords: ['People Analytics', 'HR数字化'] },
+    { regex: /(GTM|Go[-\s]?to[-\s]?Market|商业化|增长|Growth|市场|Marketing|获客|企业客户增长|Revenue)/i, search_role: 'GTM 增长 市场 商业化 Revenue Growth 企业客户增长', keywords: ['GTM', '增长', '市场', '商业化', 'Growth', 'Revenue', '企业客户增长'], capability_keywords: [] },
+    { regex: /(HR|人力资源|招聘|Recruiting|Talent Acquisition|人才|组织人才|People Ops|People Operations)/i, search_role: 'HR 人力资源 招聘 Talent Acquisition People Operations 人才发展', keywords: ['HR', '人力资源', '招聘', 'Talent Acquisition', 'People Operations', '人才发展'], capability_keywords: [] },
+    { regex: /(RevOps|Revenue Operations|SalesOps|Sales Operations|销售运营|销售|Sales|客户增长|商务运营)/i, search_role: 'RevOps SalesOps 销售运营 Revenue Operations 商务运营', keywords: ['RevOps', 'SalesOps', '销售运营', 'Revenue Operations', '商务运营'], capability_keywords: [] },
+    { regex: /(产品|Product|PM|Product Manager|产品经理|产品负责人)/i, search_role: '产品经理 Product Manager 产品负责人 产品策略', keywords: ['产品经理', 'Product Manager', '产品负责人', '产品策略'], capability_keywords: [] },
+    { regex: /(Customer Success|CSM|客户成功|客户运营|售后成功)/i, search_role: '客户成功 Customer Success 客户运营 CSM', keywords: ['客户成功', 'Customer Success', '客户运营', 'CSM'], capability_keywords: [] },
+    { regex: /(数据|Data|Analytics|BI|商业分析|Business Analyst|数据分析)/i, search_role: '数据分析 Analytics BI 商业分析 Data Analyst', keywords: ['数据分析', 'Analytics', 'BI', '商业分析', 'Data Analyst'], capability_keywords: [] },
+    { regex: /(运营|Operations|业务运营|策略运营|平台运营|内容运营|电商运营)/i, search_role: '运营 Operations 业务运营 策略运营 平台运营', keywords: ['运营', 'Operations', '业务运营', '策略运营', '平台运营'], capability_keywords: [] },
+    { regex: /(Finance|财务|财务运营|FP&A|经营分析)/i, search_role: '财务运营 FP&A 经营分析 Finance Operations', keywords: ['财务运营', 'FP&A', '经营分析', 'Finance Operations'], capability_keywords: [] },
+    { regex: /(法务|Legal|合规|Compliance|风控|Risk)/i, search_role: '法务 合规 风控 Legal Compliance Risk', keywords: ['法务', '合规', '风控', 'Legal', 'Compliance', 'Risk'], capability_keywords: [] },
+  ];
+  return families.find(item => item.regex.test(text)) || null;
+}
+
+function stripEmergingCapabilityTerms(role) {
+  return normalizeText(role)
+    .replace(/\b(AI|AIGC|LLM|Agent|Agents|Copilot|Builder|building|Automation|Digital)\b/gi, ' ')
+    .replace(/人工智能|生成式AI|大模型|智能体|副驾驶|构建|搭建|工具|应用|自动化|数字化|架构师|Architect|Owner/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeRoleDecomposition(parsed, fallback, input) {
+  const parsedObj = parsed && typeof parsed === 'object' ? parsed : {};
+  const fallbackObj = fallback && typeof fallback === 'object' ? fallback : expandEmergingRoleConcept(input.target_role, input.core_tasks);
+  const rawRole = normalizeText(input.target_role);
+  const parsedSearchRole = normalizeText(parsedObj.search_role);
+  const fallbackIsComposite = fallbackObj.is_standard_title === false;
+  const parsedIsComposite = parsedObj.is_standard_title === false;
+  const shouldUseFallbackSearchRole = fallbackIsComposite && (!parsedSearchRole || parsedSearchRole === rawRole || includesLoose(parsedSearchRole, rawRole));
+  const searchRole = shouldUseFallbackSearchRole ? fallbackObj.search_role : (parsedSearchRole || fallbackObj.search_role || rawRole);
+  const capabilityKeywords = unique([
+    ...(Array.isArray(parsedObj.capability_keywords) ? parsedObj.capability_keywords : []),
+    ...(fallbackObj.capability_keywords || [])
+  ]).slice(0, 12);
+  const isStandardTitle = fallbackIsComposite || parsedIsComposite ? false : parsedObj.is_standard_title !== false;
+  return {
+    is_standard_title: isStandardTitle,
+    search_role: searchRole,
+    rewritten_role: normalizeText(parsedObj.rewritten_role) || fallbackObj.rewritten_role || searchRole,
+    role_keywords: unique([
+      ...(Array.isArray(parsedObj.role_keywords) ? parsedObj.role_keywords : []),
+      ...(fallbackObj.role_keywords || []),
+      searchRole
+    ]).slice(0, 16),
+    capability_keywords: capabilityKeywords,
+    avoid_as_exact_title: unique([
+      ...(Array.isArray(parsedObj.avoid_as_exact_title) ? parsedObj.avoid_as_exact_title : []),
+      ...(fallbackObj.avoid_as_exact_title || []),
+      ...(isStandardTitle ? [] : [rawRole])
+    ]),
+    reason: normalizeText(parsedObj.reason) || fallbackObj.reason || ''
+  };
+}
+
+function rewriteEmergingSearchSentence(value, input, roleDecomposition) {
+  let text = normalizeText(value);
+  if (!text || roleDecomposition?.is_standard_title !== false) return text;
+  const rawRole = normalizeText(input.target_role);
+  const replacement = roleDecomposition.rewritten_role || `${roleDecomposition.search_role} ${roleDecomposition.capability_keywords?.join(' ') || ''}`;
+  if (rawRole && text.includes(rawRole)) text = text.split(rawRole).join(replacement);
+  return normalizeText(text);
+}
+
+function buildCandidateQueriesFromDecomposition(input, roleDecomposition) {
+  const roleText = normalizeText(roleDecomposition?.search_role || input.target_role);
+  const capabilities = unique(roleDecomposition?.capability_keywords || []).slice(0, 6).join(' ');
+  const base = normalizeText(`${input.business_scene || ''} ${roleText} ${capabilities} ${input.core_tasks || ''} ${input.location_preference || input.source_preference || ''}`);
+  return [
+    `site:linkedin.com/in ${base}`,
+    `${base} GitHub Medium Substack 知乎 脉脉 个人主页`,
+    `${roleText} ${capabilities} 候选人 公开资料`
+  ].map(query => rewriteEmergingSearchSentence(query, input, roleDecomposition)).map(normalizeText).filter(Boolean);
+}
+
+function isAvoidedExactRole(term, roleDecomposition) {
+  const value = normalizeText(term).toLowerCase();
+  return (roleDecomposition?.avoid_as_exact_title || []).some(avoid => value === normalizeText(avoid).toLowerCase());
 }
 
 function parseLooseJson(text) {
@@ -892,17 +1039,17 @@ function buildRoleQueryTerms(role, searchIntent) {
 }
 
 function buildCandidateRoleQuery(role, searchIntent) {
-  const expanded = expandEmergingRoleConcept(role, searchIntent?.search_sentence || searchIntent?.rewritten_intent || '');
+  const expanded = searchIntent?.role_decomposition || expandEmergingRoleConcept(role, searchIntent?.search_sentence || searchIntent?.rewritten_intent || '');
   const tokens = [
     expanded.search_role,
     ...expanded.role_keywords,
     ...expanded.capability_keywords,
     ...(searchIntent?.role_keywords || []),
     ...extractSearchTokens(expanded.search_role),
-    ...extractSearchTokens(searchIntent?.search_sentence || '').slice(0, 4),
   ]
     .map(normalizeText)
     .filter(Boolean)
+    .filter(term => !isAvoidedExactRole(term, expanded))
     .filter(term => term.length >= 2 && !/招聘|岗位|职位|JD|职责|要求/i.test(term));
   const unique = [...new Set(tokens)].slice(0, 12);
   if (!unique.length) return normalizeText(role);
@@ -1229,6 +1376,7 @@ async function storeResults(industry, role, talentRows, jdRows, meta = {}) {
     _name:role+'-'+industry,
     input: meta.input || {},
     rewritten_intent: meta.rewritten_intent || '',
+    role_decomposition: meta.role_decomposition || {},
     search_queries: meta.search_queries || [],
     company_signals: meta.company_signals || [],
     data:mergedTalents
