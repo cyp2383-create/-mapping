@@ -700,14 +700,31 @@ search_query: ${normalizeText(item.search_query).slice(0, 260)}`;
     };
   });
 
-  const qualified = evaluated
+  const accepted = evaluated
     .filter(candidate => candidate.fit_decision !== 'reject' && (candidate.ai_fit_score || 0) >= 55)
     .sort((a, b) => (b.ai_fit_score || 0) - (a.ai_fit_score || 0));
-  if (qualified.length) return qualified;
-
-  return evaluated
-    .filter(candidate => candidate.fit_decision !== 'reject' && (candidate.ai_fit_score || 0) >= 45)
+  const backup = evaluated
+    .filter(candidate => candidate.fit_decision !== 'reject' && (candidate.ai_fit_score || 0) < 55 && (candidate.ai_fit_score || 0) >= 30)
+    .map(candidate => ({
+      ...candidate,
+      risk_flags: [
+        ...(candidate.risk_flags || []),
+        'AI评估为备选候选人，匹配度不足，需人工复核后再推进'
+      ].filter(Boolean).slice(0, 3),
+    }))
     .sort((a, b) => (b.ai_fit_score || 0) - (a.ai_fit_score || 0));
+  const selected = dedupeCandidateRows([...accepted, ...backup]);
+  return selected.length ? selected.slice(0, 12) : evaluated.sort((a, b) => (b.ai_fit_score || 0) - (a.ai_fit_score || 0)).slice(0, 6);
+}
+
+function dedupeCandidateRows(rows) {
+  const seen = new Set();
+  return rows.filter(row => {
+    const key = normalizeText(row?.url || row?.source_url || row?.title).toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function normalizeFitReview(row) {
