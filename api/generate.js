@@ -359,6 +359,12 @@ async function buildSearchIntent(ai, input) {
 核心任务/职责关键词: ${input.core_tasks || '未填写'}
 地区/来源偏好: ${input.location_preference || input.source_preference || '未填写'}
 
+重要规则:
+- 如果用户输入的是新兴/复合岗位名，不能把它当作市场已有的标准 title 直接搜索。
+- 要拆成「成熟岗位主体 + 新能力/场景修饰」。例如 "OD AI Builder" 应改写为 "具备 AI building / AI工具构建 / AI应用落地能力的 OD/组织发展/People Analytics/HR数字化人才"。
+- candidate_queries 要搜索真实候选人画像，而不是搜索这个新岗位 title 是否存在。
+- JD/company 查询可以保留市场信号，但候选人查询必须优先找具备相邻能力的人。
+
 返回严格 JSON:
 {
   "search_sentence": "把四个用户输入合成一句给搜索 API 使用的中文搜索句, 必须包含业务场景、目标角色、核心任务、地区/来源偏好",
@@ -382,7 +388,10 @@ async function buildSearchIntent(ai, input) {
       ...parsed,
       search_sentence: normalizeText(parsed.search_sentence) || fallback.search_sentence,
       rewritten_intent: normalizeText(parsed.rewritten_intent) || fallback.rewritten_intent,
-      role_keywords: Array.isArray(parsed.role_keywords) ? parsed.role_keywords.map(normalizeText).filter(Boolean).slice(0, 8) : fallback.role_keywords,
+      role_keywords: unique([
+        ...(Array.isArray(parsed.role_keywords) ? parsed.role_keywords.map(normalizeText).filter(Boolean) : []),
+        ...(fallback.role_keywords || [])
+      ]).slice(0, 12),
       candidate_queries: Array.isArray(parsed.candidate_queries) ? parsed.candidate_queries.map(normalizeText).filter(Boolean).slice(0, 5) : fallback.candidate_queries,
       jd_queries: Array.isArray(parsed.jd_queries) ? parsed.jd_queries.map(normalizeText).filter(Boolean).slice(0, 4) : fallback.jd_queries,
       company_queries: Array.isArray(parsed.company_queries) ? parsed.company_queries.map(normalizeText).filter(Boolean).slice(0, 4) : fallback.company_queries,
@@ -397,21 +406,22 @@ async function buildSearchIntent(ai, input) {
 function buildFallbackSearchIntent(input) {
   const task = input.core_tasks ? `，核心任务包括${input.core_tasks}` : '';
   const place = input.location_preference ? `，地区/来源偏好为${input.location_preference}` : '';
-  const searchSentence = `寻找${input.business_scene}方向的${input.target_role}${task}${place}。`;
-  const rewritten = `搜索${input.business_scene}方向的${input.target_role}${task}${place}，重点识别候选人公开资料、来源公司、岗位要求和能力水平。`;
-  const roleKeywords = extractSearchTokens(`${input.target_role} ${input.core_tasks}`).slice(0, 8);
-  const base = `${input.business_scene} ${input.target_role} ${input.core_tasks} ${input.location_preference}`.trim();
+  const roleConcept = expandEmergingRoleConcept(input.target_role, input.core_tasks);
+  const searchSentence = `寻找${input.business_scene}方向的${roleConcept.search_role}${task}${place}。`;
+  const rewritten = `搜索${input.business_scene}方向中${roleConcept.rewritten_role}${task}${place}，重点识别候选人公开资料、来源公司、岗位要求和能力水平。`;
+  const roleKeywords = roleConcept.role_keywords.length ? roleConcept.role_keywords : extractSearchTokens(`${input.target_role} ${input.core_tasks}`).slice(0, 8);
+  const base = `${input.business_scene} ${roleConcept.search_role} ${roleConcept.capability_keywords.join(' ')} ${input.core_tasks} ${input.location_preference}`.trim();
   const candidateQueries = [
     `site:linkedin.com/in ${base}`,
     `${base} GitHub Medium Substack 知乎 个人主页`,
-    `${input.target_role} ${input.core_tasks} 候选人 公开资料`
+    `${roleConcept.search_role} ${roleConcept.capability_keywords.join(' ')} 候选人 公开资料`
   ].map(normalizeText);
   const jdQueries = [
     `${base} 招聘 JD 岗位职责`,
-    `${input.business_scene} ${input.target_role} job description responsibilities`
+    `${input.business_scene} ${roleConcept.search_role} job description responsibilities`
   ].map(normalizeText);
   const companyQueries = [
-    `${input.business_scene} ${input.target_role} 目标公司`,
+    `${input.business_scene} ${roleConcept.search_role} 目标公司`,
     `${input.business_scene} ${input.core_tasks} 头部公司 团队`
   ].map(normalizeText);
   return {
@@ -423,6 +433,24 @@ function buildFallbackSearchIntent(input) {
     company_queries: companyQueries,
     location_terms: getPreferredLocationTerms(`${input.location_preference || ''} ${input.source_preference || ''}`),
     search_queries: [...candidateQueries, ...jdQueries, ...companyQueries]
+  };
+}
+
+function expandEmergingRoleConcept(role, tasks = '') {
+  const text = normalizeText(`${role} ${tasks}`);
+  if (/(OD|组织发展|組織發展|Organization Development|Organizational Development)/i.test(text) && /(AI Builder|AI building|AI工具|AI 工具|AI应用|AI 应用|智能体|Agent|自动化)/i.test(text)) {
+    return {
+      search_role: 'OD 组织发展 People Analytics HR数字化 人才发展 组织效能',
+      rewritten_role: '具备 AI building、AI工具构建、智能体应用落地或HR数字化能力的 OD/组织发展/People Analytics 人才',
+      role_keywords: ['OD', '组织发展', 'Organization Development', 'People Analytics', 'HR数字化', '人才发展', '组织效能', 'AI Builder', 'AI工具', '智能体', 'AI应用落地'],
+      capability_keywords: ['AI Builder', 'AI building', 'AI工具构建', '智能体', 'AI应用落地', 'HR数字化', 'People Analytics'],
+    };
+  }
+  return {
+    search_role: normalizeText(role),
+    rewritten_role: normalizeText(role),
+    role_keywords: [],
+    capability_keywords: extractSearchTokens(tasks).slice(0, 6),
   };
 }
 
@@ -864,22 +892,29 @@ function buildRoleQueryTerms(role, searchIntent) {
 }
 
 function buildCandidateRoleQuery(role, searchIntent) {
+  const expanded = expandEmergingRoleConcept(role, searchIntent?.search_sentence || searchIntent?.rewritten_intent || '');
   const tokens = [
-    role,
+    expanded.search_role,
+    ...expanded.role_keywords,
+    ...expanded.capability_keywords,
     ...(searchIntent?.role_keywords || []),
-    ...extractSearchTokens(role),
+    ...extractSearchTokens(expanded.search_role),
     ...extractSearchTokens(searchIntent?.search_sentence || '').slice(0, 4),
   ]
     .map(normalizeText)
     .filter(Boolean)
     .filter(term => term.length >= 2 && !/招聘|岗位|职位|JD|职责|要求/i.test(term));
-  const unique = [...new Set(tokens)].slice(0, 8);
+  const unique = [...new Set(tokens)].slice(0, 12);
   if (!unique.length) return normalizeText(role);
   return `(${unique.map(term => `"${term}"`).join(' OR ')})`;
 }
 
 function normalizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function unique(values) {
+  return [...new Set((values || []).map(normalizeText).filter(Boolean))];
 }
 
 function includesLoose(haystack, needle) {
