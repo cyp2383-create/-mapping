@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, History, Database } from "lucide-react";
+import { Download, FileText, History, Database } from "lucide-react";
 import Link from "next/link";
 
 type HistoryRecord = {
@@ -20,6 +20,22 @@ const openReportLazy = async (id: number) => {
   const r = await fetch(`/api/data?position_id=${id}`);
   const d = await r.json();
   if (d.report_html?.length > 100 && w) { w.document.write(d.report_html); w.document.close(); }
+};
+
+const downloadReportLazy = async (record: HistoryRecord) => {
+  const r = await fetch(`/api/data?position_id=${record.id}`);
+  const d = await r.json();
+  if (!d.report_html || d.report_html.length <= 100) return;
+  const blob = new Blob([d.report_html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const name = `${record.industry || "市场"}-${record.role_direction || "人才"}-人才地图报告`.replace(/[\\/:*?"<>|]/g, "-");
+  anchor.href = url;
+  anchor.download = `${name}.html`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 };
 
 export default function HistoryPage() {
@@ -43,6 +59,7 @@ export default function HistoryPage() {
                   <div><span className="text-sm font-semibold">{r.name || `报告 #${r.id}`}</span><span className="text-xs text-muted-foreground ml-3">{r.industry} · {r.role_direction} · {(r.created_at || "").substring(0, 10)}</span></div>
                   <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" size="sm" className="text-xs" onClick={() => openReportLazy(r.id)}><FileText className="h-3 w-3 mr-1 text-amber-400" />市场报告</Button>
+                    <Button variant="outline" size="sm" className="text-xs" onClick={() => downloadReportLazy(r)}><Download className="h-3 w-3 mr-1 text-emerald-400" />下载报告</Button>
                     <Link href={`/database?position_id=${r.id}`}><Button variant="outline" size="sm" className="text-xs"><Database className="h-3 w-3 mr-1 text-sky-400" />人才库</Button></Link>
                   </div>
                 </div>
