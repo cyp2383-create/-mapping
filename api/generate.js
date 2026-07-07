@@ -613,6 +613,46 @@ function isAvoidedExactRole(term, roleDecomposition) {
   return (roleDecomposition?.avoid_as_exact_title || []).some(avoid => value === normalizeText(avoid).toLowerCase());
 }
 
+function buildGeneralJDSearchQuery(role, searchIntent) {
+  const roleClause = buildCompactJDRoleClause(role, searchIntent);
+  const locationClause = buildCompactLocationClause(searchIntent);
+  const industryTerms = buildJDIndustryTerms(searchIntent);
+  const siteScope = hasChinaLocationPreference(searchIntent) ? 'site:liepin.com/job' : '';
+  return normalizeText(`${siteScope} ${roleClause} ${locationClause} ${industryTerms} (招聘 OR 职位 OR 岗位 OR JD OR job description) -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+}
+
+function buildCompanyJDSearchQuery(company, role, searchIntent) {
+  const roleClause = buildCompactJDRoleClause(role, searchIntent);
+  const locationClause = buildCompactLocationClause(searchIntent);
+  const industryTerms = buildJDIndustryTerms(searchIntent);
+  return normalizeText(`"${company}" ${roleClause} ${locationClause} ${industryTerms} (招聘 OR 职位 OR 岗位 OR careers OR jobs) -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+}
+
+function buildBroaderJDSearchQuery(role, searchIntent, companies) {
+  const roleClause = buildCompactJDRoleClause(role, searchIntent);
+  const locationClause = buildCompactLocationClause(searchIntent);
+  const companyTerms = companies
+    .slice(0, 8)
+    .map(c => normalizeText(getCompanyName(c)))
+    .filter(Boolean)
+    .map(name => `"${name}"`)
+    .join(' OR ');
+  const industryTerms = buildJDIndustryTerms(searchIntent);
+  return normalizeText(`${roleClause} ${locationClause} ${industryTerms} ${companyTerms} 招聘 岗位 职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
+}
+
+function buildJDIndustryTerms(searchIntent) {
+  const text = normalizeText(`${searchIntent?.search_sentence || ''} ${searchIntent?.rewritten_intent || ''}`);
+  const terms = [];
+  if (/互联网|科技|技术公司|AI|人工智能|SaaS|软件|平台/i.test(text)) terms.push('互联网', '科技', 'SaaS');
+  if (/电商|内容电商|零售/i.test(text)) terms.push('电商');
+  if (/金融|支付|FinTech/i.test(text)) terms.push('金融科技');
+  if (/游戏|文娱|内容|社区/i.test(text)) terms.push('内容', '社区');
+  if (/制造|供应链|物流/i.test(text)) terms.push('供应链');
+  if (!terms.length) return '';
+  return `(${unique(terms).slice(0, 4).map(term => `"${term}"`).join(' OR ')})`;
+}
+
 function parseLooseJson(text) {
   let t = String(text || '').trim();
   if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n');
@@ -693,15 +733,27 @@ ${domesticInstruction}
 }
 
 async function searchJDs(tav, companies, role, searchIntent) {
-  const jds = []; const now = new Date().getFullYear();
-  const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || role);
-  const generalResults = await tav.search(`${searchSentence} 招聘 JD 岗位职责 ${now}`, 3);
-  generalResults.forEach(r => jds.push({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting'}));
+  const jds = [];
+  const generalQuery = buildGeneralJDSearchQuery(role, searchIntent);
+  const generalResults = await tav.search(generalQuery, 6);
+  filterJDResults(generalResults, '', role, searchIntent)
+    .forEach(r => jds.push({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: generalQuery}));
   for (const c of companies.slice(0,4)) {
-    const results = await tav.search(`${searchSentence} ${c.name} 招聘 JD ${now}`, 1);
-    results.forEach(r => jds.push({...r, company:c.name, source_type:'job_posting'}));
+    const companyName = normalizeText(getCompanyName(c));
+    const query = buildCompanyJDSearchQuery(companyName, role, searchIntent);
+    const results = await tav.search(query, 2);
+    filterJDResults(results, companyName, role, searchIntent)
+      .forEach(r => jds.push({...r, company:companyName, source_type:'job_posting', search_query: query}));
   }
-  return dedupeByUrl(jds).slice(0,12);
+  let ranked = rankJDResults(dedupeByUrl(jds), role, searchIntent);
+  if (ranked.length < 6) {
+    const supplementalQuery = buildBroaderJDSearchQuery(role, searchIntent, companies);
+    const supplemental = await tav.search(supplementalQuery, 8);
+    const filtered = filterJDResults(supplemental, '', role, searchIntent)
+      .map(r => ({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: supplementalQuery}));
+    ranked = rankJDResults(dedupeByUrl([...ranked, ...filtered]), role, searchIntent);
+  }
+  return ranked.slice(0,12);
 }
 
 async function searchCompanyPages(tav, companies, searchIntent) {
@@ -1000,6 +1052,98 @@ function looksLikeNonPersonResult(result) {
   return blocked.some(term => text.includes(term.toLowerCase()));
 }
 
+function isJobPostingSource(result) {
+  try {
+    const url = new URL(result?.url || '');
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    const path = decodeURIComponent(url.pathname || '').toLowerCase();
+    const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${path}`).toLowerCase();
+    if (isPublicPersonProfileUrl(result)) return false;
+    if (isArticleOrVideoSource(result)) return false;
+    if (isNonBusinessJobSource(result)) return false;
+    if (isKnownJobBoardUrl(result)) return true;
+    if (hasSpecificJobDetailSignal(result)) return true;
+    if (/(招聘|职位|岗位|社招|校招|任职要求|岗位职责|job description|responsibilities|requirements|apply now|hiring|position)/i.test(text) && !isGenericCareerHome(result)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isKnownJobBoardUrl(result) {
+  try {
+    const host = new URL(result?.url || '').hostname.toLowerCase().replace(/^www\./, '');
+    return /zhipin\.com|liepin\.com|lagou\.com|51job\.com|zhaopin\.com|kanzhun\.com|jobui\.com|jobs\.bytedance\.com|talent\.alibaba\.com|careers\.tencent\.com|talent\.baidu\.com|campus\.meituan\.com|jobs\.jd\.com|career\.huawei\.com|jobs\.xiaohongshu\.com|kuaishou\.cn|jobs\.deepseek\.com/i.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function isOfficialJobBoardUrl(result) {
+  try {
+    const host = new URL(result?.url || '').hostname.toLowerCase().replace(/^www\./, '');
+    return /jobs\.bytedance\.com|talent\.alibaba\.com|careers\.tencent\.com|talent\.baidu\.com|campus\.meituan\.com|jobs\.jd\.com|career\.huawei\.com|jobs\.xiaohongshu\.com|kuaishou\.cn|jobs\.deepseek\.com/i.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function hasSpecificJobDetailSignal(result) {
+  try {
+    const url = new URL(result?.url || '');
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    const path = decodeURIComponent(url.pathname || '').toLowerCase();
+    const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${path}`).toLowerCase();
+    if (host.endsWith('linkedin.com')) return /\/jobs\/view\//i.test(path);
+    if (/(\/job\/|\/jobs\/[^/?#]+|\/careers\/[^/?#]+|\/position\/|\/positions\/|\/job-detail|\/jobdetail|\/job_detail|\/recruit\/[^/?#]+|\/job_description|\/jobdescription|\/social\/[^/?#]+|\/campus\/[^/?#]+|\/a\/\d+)/i.test(path)) return true;
+    if (/liepin\.com/i.test(url.hostname) && /(\/job\/\d+\.shtml|\/job\/\d+|\/a\/\d+)/i.test(path)) return true;
+    return /(岗位职责|任职要求|职位描述|工作职责|job description|responsibilities|requirements|qualifications|apply now|立即申请|投递)/i.test(text);
+  } catch {
+    return false;
+  }
+}
+
+function isGenericCareerHome(result) {
+  try {
+    const url = new URL(result?.url || '');
+    const path = url.pathname.replace(/\/+$/, '').toLowerCase();
+    const title = normalizeText(result?.title || '').toLowerCase();
+    return /^(|\/|\/jobs|\/careers|\/career|\/recruit|\/campus|\/social)$/.test(path) || /^(home|careers|jobs|招聘官网|社招|校招)$/i.test(title);
+  } catch {
+    return false;
+  }
+}
+
+function isArticleOrVideoSource(result) {
+  try {
+    const host = new URL(result?.url || '').hostname.toLowerCase().replace(/^www\./, '');
+    return /sohu\.com|36kr\.com|huxiu\.com|woshipm\.com|jianshu\.com|zhihu\.com|medium\.com|youtube\.com|bilibili\.com|youku\.com|qq\.com|163\.com|sina\.com|toutiao\.com|baijiahao\.baidu\.com/i.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function isNonBusinessJobSource(result) {
+  try {
+    const host = new URL(result?.url || '').hostname.toLowerCase().replace(/^www\./, '');
+    return /untalent\.org|unjobs\.org|unjobnet\.org|reliefweb\.int|idealist\.org|academicpositions\.|scholarship|volunteer/i.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function looksLikeNonJDResult(result) {
+  const raw = `${result?.title || ''} ${result?.snippet || ''} ${result?.url || ''}`;
+  const text = normalizeText(raw).toLowerCase();
+  if (/\.(pdf|doc|docx|ppt|pptx)(\?|#|$)/i.test(result?.url || '')) return true;
+  if (isArticleOrVideoSource(result)) return true;
+  if (isNonBusinessJobSource(result)) return true;
+  if (isGenericCareerHome(result)) return true;
+  if (/api documentation|documentation|docs|developer|developers|guide|guides|quickstart|sdk|reference|教程|指南|文档|白皮书|研究报告|报告下载|课程|培训|百科|是什么意思|是什么|what is|definition|案例|新闻|资讯|论坛|article|blog|medium\.com|wikipedia|github\.com/i.test(text)) return true;
+  if (/公司介绍|关于我们|产品介绍|解决方案|客户案例|download|ebook|research report/i.test(text) && !/招聘|职位|岗位|careers|jobs|hiring|position/i.test(text)) return true;
+  return false;
+}
+
 function dedupeByProfileUrl(results) {
   const seen = new Set();
   const unique = [];
@@ -1084,13 +1228,27 @@ function buildCompactRoleOrClause(role, searchIntent) {
   return `(${tokens.map(term => `"${term}"`).join(' OR ')})`;
 }
 
+function buildCompactJDRoleClause(role, searchIntent) {
+  const decomp = searchIntent?.role_decomposition || {};
+  const tokens = unique([
+    ...inferAdjacentRoleTerms(`${role} ${decomp.search_role || ''}`),
+    ...extractSearchTokens(decomp.search_role || role),
+  ])
+    .filter(term => !isAvoidedExactRole(term, decomp))
+    .filter(isUsefulProfileRoleTerm)
+    .filter(isUsefulJDRoleTerm)
+    .slice(0, 8);
+  if (!tokens.length) return `"${normalizeText(role)}"`;
+  return `(${tokens.map(term => `"${term}"`).join(' OR ')})`;
+}
+
 function inferAdjacentRoleTerms(text) {
   const value = normalizeText(text);
   const terms = [];
   if (/(OD|组织发展|Organization Development|People Analytics|HR数字化|人才发展|组织效能|人力资源)/i.test(value)) {
     terms.push('组织发展', '人才发展', 'People Analytics', 'HR数字化', '组织效能', 'HRBP');
   }
-  if (/(^|[\s/|,，、()（）-])HR($|[\s/|,，、()（）-])|人力资源|招聘|Recruiting|Talent Acquisition|People Operations/i.test(value)) {
+  if (/(^|[\s/|,，、()（）-])HR($|[\s/|,，、()（）-])|人力资源|招聘|Recruiting|Talent Acquisition|People Operations/i.test(value) && !/(OD|组织发展|People Analytics|HR数字化|人才发展|组织效能)/i.test(value)) {
     terms.push('HR', '人力资源', '招聘', 'Talent Acquisition', 'People Operations', 'HRBP');
   }
   if (/(RevOps|SalesOps|销售运营|Revenue Operations|商务运营)/i.test(value)) {
@@ -1111,7 +1269,7 @@ function inferAdjacentRoleTerms(text) {
   if (/(法务|Legal|合规|Compliance|风控|Risk)/i.test(value)) {
     terms.push('法务', '合规', '风控', 'Legal', 'Compliance', 'Risk');
   }
-  if (/数据|Data|Analytics|(^|[\s/|,，、()（）-])BI($|[\s/|,，、()（）-])|商业分析|Data Analyst|Business Analyst/i.test(value)) {
+  if (/数据|Data Analytics|(^|[\s/|,，、()（）-])BI($|[\s/|,，、()（）-])|商业分析|Data Analyst|Business Analyst/i.test(value)) {
     terms.push('数据分析', 'Data Analyst', 'Analytics', 'BI', '商业分析');
   }
   if (/研发|工程|Engineering|Engineer|技术|架构|后端|前端|全栈|算法|Machine Learning|(^|[\s/|,，、()（）-])ML($|[\s/|,，、()（）-])|MLOps/i.test(value)) {
@@ -1229,6 +1387,30 @@ function passesLocationConstraint(result, searchIntent) {
   return !isExplicitForeignSignal(text);
 }
 
+function passesJDLocationConstraint(result, searchIntent) {
+  const terms = searchIntent?.location_terms || [];
+  const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${result?.url || ''}`);
+  const cityGroups = [
+    ['北京', 'Beijing'],
+    ['上海', 'Shanghai'],
+    ['深圳', 'Shenzhen'],
+    ['广州', 'Guangzhou'],
+    ['杭州', 'Hangzhou'],
+    ['成都', 'Chengdu'],
+    ['武汉', 'Wuhan'],
+    ['南京', 'Nanjing'],
+    ['苏州', 'Suzhou']
+  ];
+  const preferred = cityGroups.filter(group => group.some(city => terms.some(term => includesLoose(city, term) || includesLoose(term, city))));
+  if (!preferred.length) return true;
+  const hasPreferred = preferred.some(group => group.some(city => includesLoose(text, city)));
+  if (hasPreferred) return true;
+  const hasOtherCity = cityGroups
+    .filter(group => !preferred.includes(group))
+    .some(group => group.some(city => includesLoose(text, city)));
+  return !hasOtherCity;
+}
+
 function isExplicitForeignSignal(value) {
   return /United States|USA|U\.S\.|America|San Francisco|Bay Area|New York|Seattle|California|Boston|Austin|Los Angeles|Washington|Canada|Toronto|Vancouver|London|United Kingdom|UK|Singapore|India|Bangalore|Bengaluru|Germany|Berlin|France|Paris|Netherlands|Amsterdam|Australia|Sydney|Melbourne/i.test(normalizeText(value));
 }
@@ -1242,6 +1424,62 @@ function rankProfileResults(results, role, searchIntent) {
   return results
     .map(result => ({...result, match_score: scoreProfileResult(result, role, searchIntent)}))
     .sort((a, b) => b.match_score - a.match_score);
+}
+
+function filterJDResults(results, company, role, searchIntent) {
+  return results.filter(result => {
+    if (!isJobPostingSource(result)) return false;
+    if (looksLikeNonJDResult(result)) return false;
+    if (!passesLocationConstraint(result, searchIntent)) return false;
+    if (!passesJDLocationConstraint(result, searchIntent)) return false;
+    const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${result?.url || ''}`);
+    const hasCompany = company && includesLoose(text, company);
+    const hasRole = getJDRoleTokens(role, searchIntent).some(token => includesLoose(text, token));
+    if (!hasRole) return false;
+    return hasSpecificJobDetailSignal(result) || (hasCompany && isOfficialJobBoardUrl(result));
+  });
+}
+
+function rankJDResults(results, role, searchIntent) {
+  return results
+    .map(result => ({...result, match_score: scoreJDResult(result, role, searchIntent)}))
+    .sort((a, b) => b.match_score - a.match_score);
+}
+
+function scoreJDResult(result, role, searchIntent) {
+  const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${result?.url || ''}`).toLowerCase();
+  let score = 100;
+  if (isOfficialJobBoardUrl(result)) score += 30;
+  if (isKnownJobBoardUrl(result)) score += 20;
+  if (/招聘|职位|岗位|职责|任职要求|job|career|position|responsibilities|requirements/i.test(text)) score += 20;
+  for (const token of getJDRoleTokens(role, searchIntent)) {
+    const normalized = normalizeText(token).toLowerCase();
+    if (normalized && text.includes(normalized)) score += 10;
+  }
+  for (const token of unique(searchIntent?.role_decomposition?.capability_keywords || searchIntent?.capability_keywords || []).slice(0, 6)) {
+    const normalized = normalizeText(token).toLowerCase();
+    if (normalized && text.includes(normalized)) score += 6;
+  }
+  if (hasChinaLocationPreference(searchIntent) && hasChinaSignal(text, searchIntent)) score += 12;
+  if (looksLikeNonJDResult(result)) score -= 100;
+  if (isExplicitForeignSignal(text)) score -= 60;
+  return score;
+}
+
+function getJDRoleTokens(role, searchIntent) {
+  const decomp = searchIntent?.role_decomposition || {};
+  return unique([
+    ...inferAdjacentRoleTerms(`${role} ${decomp.search_role || ''}`),
+    ...extractSearchTokens(decomp.search_role || role)
+  ])
+    .filter(term => !isAvoidedExactRole(term, decomp))
+    .filter(isUsefulProfileRoleTerm)
+    .filter(isUsefulJDRoleTerm)
+    .slice(0, 12);
+}
+
+function isUsefulJDRoleTerm(term) {
+  return !/^(People|Analytics|Data|Operations|Product|Manager|HR)$/i.test(normalizeText(term));
 }
 
 function scoreProfileResult(result, role, searchIntent) {
