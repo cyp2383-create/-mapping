@@ -766,6 +766,7 @@ function isPublicProfileUrl(value?: string) {
   if (/^https?:\/\/([^/]+\.)?linkedin\.com\/in\/[^/?#]+/i.test(url)) return true;
   if (/^https?:\/\/([^/]+\.)?github\.com\/(?!orgs\/|features|enterprise|marketplace|topics|collections|events|settings|login|signup|explore|jobs|about|pricing|search)[^/?#]+\/?$/i.test(url)) return true;
   if (/^https?:\/\/([^/]+\.)?zhihu\.com\/people\/[^/?#]+/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?maimai\.cn\/(profile|contact\/detail)\//i.test(url)) return true;
   if (/^https?:\/\/(x\.com|([^/]+\.)?twitter\.com)\/(?!home|i\/|share|intent|search|notifications|messages)[^/?#]+\/?$/i.test(url)) return true;
   if (/^https?:\/\/([^/]+\.)?medium\.com\/(@[^/?#]+|[^/?#]+)\/?$/i.test(url)) return true;
   if (/^https?:\/\/([^/]+\.)?substack\.com\/?(?!p\/|archive|about)/i.test(url)) return true;
