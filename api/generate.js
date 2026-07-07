@@ -128,8 +128,10 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
   send({step:'jds',text:`找到${jds.length}条JD`,progress:35});
 
   send({step:'talents',text:'搜索候选人...',progress:40});
-  const talents = await searchLinkedIn(tavily, companies, role, searchIntent);
-  send({step:'talents',text:`找到${talents.length}位候选人`,progress:55});
+  const rawTalents = await searchLinkedIn(tavily, companies, role, searchIntent);
+  send({step:'talents',text:`找到${rawTalents.length}位候选人，正在判断匹配度...`,progress:50});
+  const talents = await evaluateCandidateFit(ai, rawTalents, searchInput, searchIntent);
+  send({step:'talents',text:`AI评估后保留${talents.length}位候选人`,progress:55});
 
   // Deep enrichment: extract hidden fields from snippets (parallel)
   send({step:'enrich',text:'深度提取候选人档案...',progress:58});
@@ -146,16 +148,17 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
     return {
       name:parsedTalent.name, current_title:parsedTalent.current_title||'',
       current_company:t.company||parsedTalent.current_company||'',
-      source_platform:'linkedin', source_url:t.url||'',
-      contact_type:t.url?'linkedin':'none', contact_value:t.url||'',
+      source_platform:detectPlatform(t.url)||'web', source_url:t.url||'',
+      contact_type:t.url?(detectPlatform(t.url)||'profile'):'none', contact_value:t.url||'',
       level: extractLevel(parsedTalent.current_title), tier: classifyTier(t.company||'', parsedTalent.current_title),
       education:e.education||'', languages:e.languages||'',
       certifications:e.certifications||'', influence_score:e.influence_score||0,
       location:e.location||'',
-      match_score:t.match_score||0,
+      match_score:t.ai_fit_score||t.match_score||0,
+      fit_decision:t.fit_decision||'unreviewed',
       sources: buildTalentSources(t),
-      match_reasons: buildMatchReasons(t, searchInput, searchIntent),
-      verification_needed: ['实际职责范围', '团队规模与业务阶段', '可触达性与求职意愿'],
+      match_reasons:t.fit_reasons?.length ? t.fit_reasons : buildMatchReasons(t, searchInput, searchIntent),
+      verification_needed:t.risk_flags?.length ? t.risk_flags : ['实际职责范围', '团队规模与业务阶段', '可触达性与求职意愿'],
       search_queries: searchIntent.search_queries,
     };
   });
@@ -427,8 +430,16 @@ function parseLooseJson(text) {
   let t = String(text || '').trim();
   if (t.startsWith('```')) t = t.split('\n').slice(1).join('\n');
   if (t.endsWith('```')) t = t.slice(0, -3);
-  const start = t.indexOf('{');
-  const end = t.lastIndexOf('}');
+  const arrayStart = t.indexOf('[');
+  const arrayEnd = t.lastIndexOf(']');
+  const objectStart = t.indexOf('{');
+  const objectEnd = t.lastIndexOf('}');
+  if (arrayStart >= 0 && arrayEnd > arrayStart && (objectStart < 0 || arrayStart < objectStart)) {
+    t = t.slice(arrayStart, arrayEnd + 1);
+    return JSON.parse(t);
+  }
+  const start = objectStart;
+  const end = objectEnd;
   if (start >= 0 && end > start) t = t.slice(start, end + 1);
   return JSON.parse(t);
 }
@@ -601,6 +612,131 @@ function filterLinkedInProfileResults(results, company, role, searchIntent) {
     return hasCompany || hasRole;
   });
   return filtered;
+}
+
+async function evaluateCandidateFit(ai, candidates, input, searchIntent) {
+  const pool = candidates.slice(0, 40);
+  if (!pool.length) return [];
+  const reviews = [];
+  for (let offset = 0; offset < pool.length; offset += 20) {
+    const batch = pool.slice(offset, offset + 20);
+    const prompt = `你是资深猎头/招聘研究员。请判断下面候选人是否真的符合用户要找的人，不要做关键词匹配。
+
+用户要找的人:
+- 业务场景/行业: ${input.business_scene || ''}
+- 目标角色/岗位: ${input.target_role || ''}
+- 核心职责/任务: ${input.core_tasks || '未填写'}
+- 地区/来源偏好: ${input.location_preference || input.source_preference || '未填写'}
+- 搜索意图: ${searchIntent?.rewritten_intent || searchIntent?.search_sentence || ''}
+
+判断原则:
+1. 只根据候选人的公开资料标题、摘要、公司、链接判断；证据不足要降分，不能脑补履历。
+2. 高分候选人必须在职能方向、业务阶段、职责关键词、公司/行业背景上整体匹配。
+3. 只是网页里出现某个关键词不代表匹配；实习生、学生、纯技术文档、公司页、招聘页、岗位页、课程页、明显无关职能要 reject。
+4. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
+5. 不要新增候选人，只评估给定 index。
+
+返回严格 JSON 数组，每条格式:
+[
+  {
+    "index": 0,
+    "fit_score": 0,
+    "decision": "strong|possible|weak|reject",
+    "fit_reasons": ["具体为什么匹配，最多3条"],
+    "risk_flags": ["需要验证或不匹配风险，最多3条"],
+    "inferred_role": "从公开资料判断的角色",
+    "inferred_company": "从公开资料判断的公司"
+  }
+]
+
+候选人:
+${batch.map((item, index) => {
+  const absoluteIndex = offset + index;
+  return `[${absoluteIndex}]
+title: ${normalizeText(item.title).slice(0, 220)}
+company: ${normalizeText(item.company).slice(0, 120)}
+url: ${normalizeText(item.url).slice(0, 220)}
+snippet: ${normalizeText(item.snippet).slice(0, 900)}
+search_query: ${normalizeText(item.search_query).slice(0, 260)}`;
+}).join('\n\n')}`;
+
+    try {
+      const text = await ai.chat(prompt, 3500);
+      const parsed = parseLooseJson(text);
+      const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.candidates) ? parsed.candidates : []);
+      rows.forEach(row => reviews.push(normalizeFitReview(row)));
+    } catch {}
+  }
+
+  const reviewByIndex = new Map(reviews.filter(Boolean).map(review => [review.index, review]));
+  const evaluated = pool.map((candidate, index) => {
+    const review = reviewByIndex.get(index);
+    if (!review) {
+      return {
+        ...candidate,
+        ai_fit_score: candidate.match_score || 0,
+        fit_decision: 'unreviewed',
+        fit_reasons: buildFallbackFitReasons(candidate),
+        risk_flags: ['AI匹配评估失败，需人工复核'],
+      };
+    }
+    return {
+      ...candidate,
+      ai_fit_score: review.fit_score,
+      fit_decision: review.decision,
+      fit_reasons: review.fit_reasons,
+      risk_flags: review.risk_flags,
+      inferred_role: review.inferred_role,
+      inferred_company: review.inferred_company,
+      company: review.inferred_company || candidate.company,
+    };
+  });
+
+  const qualified = evaluated
+    .filter(candidate => candidate.fit_decision !== 'reject' && (candidate.ai_fit_score || 0) >= 55)
+    .sort((a, b) => (b.ai_fit_score || 0) - (a.ai_fit_score || 0));
+  if (qualified.length) return qualified;
+
+  return evaluated
+    .filter(candidate => candidate.fit_decision !== 'reject' && (candidate.ai_fit_score || 0) >= 45)
+    .sort((a, b) => (b.ai_fit_score || 0) - (a.ai_fit_score || 0));
+}
+
+function normalizeFitReview(row) {
+  const index = Number(row?.index);
+  if (!Number.isInteger(index) || index < 0) return null;
+  const fitScore = Math.max(0, Math.min(100, Number(row?.fit_score) || 0));
+  const decision = normalizeFitDecision(row?.decision, fitScore);
+  return {
+    index,
+    fit_score: fitScore,
+    decision,
+    fit_reasons: normalizeStringArray(row?.fit_reasons).slice(0, 3),
+    risk_flags: normalizeStringArray(row?.risk_flags).slice(0, 3),
+    inferred_role: normalizeText(row?.inferred_role).slice(0, 120),
+    inferred_company: normalizeText(row?.inferred_company).slice(0, 120),
+  };
+}
+
+function normalizeFitDecision(value, score) {
+  const text = normalizeText(value).toLowerCase();
+  if (['strong', 'possible', 'weak', 'reject'].includes(text)) return text;
+  if (score >= 75) return 'strong';
+  if (score >= 55) return 'possible';
+  if (score >= 40) return 'weak';
+  return 'reject';
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(item => normalizeText(item)).filter(Boolean);
+}
+
+function buildFallbackFitReasons(candidate) {
+  const reasons = [];
+  if (candidate.company) reasons.push(`公开资料关联 ${candidate.company}`);
+  if (candidate.title) reasons.push(`公开资料标题: ${normalizeText(candidate.title).slice(0, 80)}`);
+  return reasons.slice(0, 3);
 }
 
 function isLinkedInProfileUrl(result) {
@@ -1006,17 +1142,8 @@ async function storeResults(industry, role, talentRows, jdRows, meta = {}) {
   const existing = await db.execute("SELECT id, talent_data, jd_data FROM positions WHERE name=?", [pname]);
   const existingId = existing.rows?.[0]?.[0]?.value;
 
-  // Merge talent data: deduplicate by source_url
+  // Replace candidate data on each run so old low-fit candidates do not leak into new searches.
   let mergedTalents = talentRows.slice(0, 40);
-  if (existingId) {
-    try {
-      const oldData = JSON.parse(existing.rows[0][1]?.value || '{}');
-      const oldTalents = oldData.data || [];
-      const seen = new Set(oldTalents.map(t => t.source_url).filter(Boolean));
-      const newTalents = talentRows.filter(t => !seen.has(t.source_url) || !t.source_url);
-      mergedTalents = [...oldTalents, ...newTalents].slice(0, 100);
-    } catch {}
-  }
 
   const tjson = JSON.stringify({
     _industry:industry,
