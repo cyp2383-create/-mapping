@@ -13,8 +13,23 @@ type TalentRow = {
   current_company?: string;
   current_title?: string;
   tier?: string;
+  source_platform?: string;
+  source_url?: string;
+  profile_url?: string;
+  linkedin_url?: string;
+  url?: string;
+  link?: string;
   contact_type?: string;
   contact_value?: string;
+  sources?: Array<{
+    type?: string;
+    platform?: string;
+    title?: string;
+    url?: string;
+    source_url?: string;
+    href?: string;
+    link?: string;
+  }>;
 };
 
 type JobRow = {
@@ -72,7 +87,32 @@ function DatabaseContent() {
                 <div className="overflow-auto max-h-[500px]"><Table>
                   <TableHeader><TableRow><TableHead className="text-xs">姓名</TableHead><TableHead className="text-xs">公司</TableHead><TableHead className="text-xs">职位</TableHead><TableHead className="text-xs">档位</TableHead><TableHead className="text-xs">联系</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {talents.map((t, i) => (<TableRow key={i}><TableCell className="text-xs font-medium">{t.name || "***"}</TableCell><TableCell className="text-xs">{t.current_company || ""}</TableCell><TableCell className="text-xs max-w-[180px] truncate">{t.current_title || ""}</TableCell><TableCell><Badge variant="outline" className={`text-[10px] ${tierColor(t.tier)}`}>{tierLabel(t.tier)}</Badge></TableCell><TableCell className="text-xs">{t.contact_value ? <a href={t.contact_value} target="_blank" className="text-primary hover:underline flex items-center gap-1">{t.contact_type || "链接"} <ExternalLink className="h-2.5 w-2.5" /></a> : (t.contact_type || "—")}</TableCell></TableRow>))}
+                    {talents.map((t, i) => {
+                      const talentUrl = getTalentUrl(t);
+                      return (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs font-medium">
+                            {talentUrl ? (
+                              <a href={talentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                {t.name || "***"}
+                                <ExternalLink className="h-2.5 w-2.5" />
+                              </a>
+                            ) : (t.name || "***")}
+                          </TableCell>
+                          <TableCell className="text-xs">{t.current_company || ""}</TableCell>
+                          <TableCell className="text-xs max-w-[180px] truncate">{t.current_title || ""}</TableCell>
+                          <TableCell><Badge variant="outline" className={`text-[10px] ${tierColor(t.tier)}`}>{tierLabel(t.tier)}</Badge></TableCell>
+                          <TableCell className="text-xs">
+                            {talentUrl ? (
+                              <a href={talentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+                                {t.contact_type || t.source_platform || "链接"}
+                                <ExternalLink className="h-2.5 w-2.5" />
+                              </a>
+                            ) : (t.contact_type || "—")}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                     {!talents.length && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">暂无数据</TableCell></TableRow>}
                   </TableBody>
                 </Table></div>}
@@ -96,4 +136,27 @@ function DatabaseContent() {
 
 export default function DatabasePage() {
   return <Suspense fallback={<div className="text-center py-10 text-muted-foreground text-sm">加载中...</div>}><DatabaseContent /></Suspense>;
+}
+
+function getTalentUrl(talent: TalentRow) {
+  const direct = firstPublicProfileUrl(talent.source_url, talent.contact_value, talent.profile_url, talent.linkedin_url, talent.url, talent.link);
+  if (direct) return direct;
+  const personProfile = talent.sources?.find((source) => source.type === "person_profile" && firstPublicProfileUrl(source.url, source.source_url, source.href, source.link));
+  const firstSource = talent.sources?.find((source) => firstPublicProfileUrl(source.url, source.source_url, source.href, source.link));
+  return firstPublicProfileUrl(personProfile?.url, personProfile?.source_url, personProfile?.href, personProfile?.link, firstSource?.url, firstSource?.source_url, firstSource?.href, firstSource?.link);
+}
+
+function firstPublicProfileUrl(...values: Array<string | undefined>) {
+  return values.find((value) => isPublicProfileUrl(value)) || "";
+}
+
+function isPublicProfileUrl(value?: string) {
+  const url = String(value || "").trim();
+  if (/^https?:\/\/([^/]+\.)?linkedin\.com\/in\/[^/?#]+/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?github\.com\/(?!orgs\/|features|enterprise|marketplace|topics|collections|events|settings|login|signup|explore|jobs|about|pricing|search)[^/?#]+\/?$/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?zhihu\.com\/people\/[^/?#]+/i.test(url)) return true;
+  if (/^https?:\/\/(x\.com|([^/]+\.)?twitter\.com)\/(?!home|i\/|share|intent|search|notifications|messages)[^/?#]+\/?$/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?medium\.com\/(@[^/?#]+|[^/?#]+)\/?$/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?substack\.com\/?(?!p\/|archive|about)/i.test(url)) return true;
+  return false;
 }

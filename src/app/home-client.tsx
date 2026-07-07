@@ -65,6 +65,9 @@ type SourceItem = {
   platform?: string;
   title?: string;
   url?: string;
+  source_url?: string;
+  href?: string;
+  link?: string;
   snippet?: string;
   company?: string;
 };
@@ -77,6 +80,10 @@ type Talent = {
   title?: string;
   source_platform?: string;
   source_url?: string;
+  profile_url?: string;
+  linkedin_url?: string;
+  url?: string;
+  link?: string;
   contact_type?: string;
   contact_value?: string;
   education?: string;
@@ -596,8 +603,9 @@ function CandidateCard({ talent, index, tier }: { talent: Talent; index: number;
   const company = cleanText(talent.current_company || talent.company, "公司未标注");
   const title = cleanText(talent.current_title || talent.title, "职位未标注");
   const location = cleanText(talent.location, "地点未标注");
-  const primaryUrl = getCandidatePrimaryUrl(talent);
-  const sourceCount = talent.sources?.length || (talent.source_url ? 1 : 0);
+  const sourceLinks = getCandidateSourceLinks(talent);
+  const primaryUrl = sourceLinks[0]?.url || "";
+  const sourceCount = sourceLinks.length;
   const profileFields = [
     { label: "层级", value: talent.level },
     { label: "影响力", value: talent.influence_score ? `${talent.influence_score}/10` : "" },
@@ -625,7 +633,7 @@ function CandidateCard({ talent, index, tier }: { talent: Talent; index: number;
             <h3 className="truncate text-base font-bold text-white">{displayName}</h3>
           )}
           <p className="mt-1 truncate text-sm text-slate-300">{company} · {title}</p>
-          <p className="mt-1 text-xs text-slate-500">{location} · 证据 {sourceCount} 条</p>
+          <p className="mt-1 text-xs text-slate-500">{location} · 公开资料 {sourceCount} 条</p>
         </div>
         {primaryUrl ? (
           <a href={primaryUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-cyan-300/20 px-2.5 py-1.5 text-xs font-semibold text-cyan-100 hover:border-cyan-200/50">
@@ -649,12 +657,12 @@ function CandidateCard({ talent, index, tier }: { talent: Talent; index: number;
       <CandidateList title="匹配理由" items={talent.match_reasons} />
       <CandidateList title="待验证" items={talent.verification_needed} />
 
-      {talent.sources?.length ? (
+      {sourceLinks.length ? (
         <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold text-slate-300">证据来源</p>
+          <p className="mb-2 text-xs font-semibold text-slate-300">公开资料</p>
           <div className="grid gap-2">
-            {talent.sources.slice(0, 4).map((source, sourceIndex) => (
-              <a key={`${source.url || source.title || sourceIndex}`} href={source.url || "#"} target="_blank" rel="noreferrer" className="rounded-md border border-white/10 bg-white/[0.03] p-2 text-xs transition hover:border-cyan-300/30">
+            {sourceLinks.slice(0, 4).map((source, sourceIndex) => (
+              <a key={`${source.url || source.title || sourceIndex}`} href={source.url} target="_blank" rel="noreferrer" className="rounded-md border border-white/10 bg-white/[0.03] p-2 text-xs transition hover:border-cyan-300/30">
                 <div className="flex items-center justify-between gap-3">
                   <span className="truncate font-semibold text-slate-200">{cleanText(source.title, source.type || "来源")}</span>
                   <span className="shrink-0 text-cyan-100">{cleanText(source.platform || source.type, "web")}</span>
@@ -682,12 +690,27 @@ function CandidateList({ title, items }: { title: string; items?: string[] }) {
   );
 }
 
-function getCandidatePrimaryUrl(talent: Talent) {
-  if (isHttpUrl(talent.source_url)) return talent.source_url;
-  const personProfile = talent.sources?.find((source) => source.type === "person_profile" && isHttpUrl(source.url));
-  if (personProfile?.url) return personProfile.url;
-  const firstSource = talent.sources?.find((source) => isHttpUrl(source.url));
-  return firstSource?.url || "";
+function getCandidateSourceLinks(talent: Talent) {
+  const directLinks: SourceItem[] = [
+    { type: "person_profile", platform: talent.source_platform || talent.contact_type, title: talent.name || talent.title || "个人主页", url: talent.source_url },
+    { type: talent.contact_type || "contact", platform: talent.contact_type, title: talent.contact_type || "联系入口", url: talent.contact_value },
+    { type: "person_profile", platform: "profile", title: "公开资料页", url: talent.profile_url },
+    { type: "person_profile", platform: "linkedin", title: "LinkedIn", url: talent.linkedin_url },
+    { type: "person_profile", platform: talent.source_platform, title: talent.title || talent.name || "来源链接", url: firstHttpUrl(talent.url, talent.link) },
+  ];
+  const sourceLinks = (talent.sources || []).map((source) => ({
+    ...source,
+    url: firstHttpUrl(source.url, source.source_url, source.href, source.link),
+  }));
+
+  const seen = new Set<string>();
+  return [...directLinks, ...sourceLinks]
+    .map((source) => ({ ...source, url: firstHttpUrl(source.url) }))
+    .filter((source) => {
+      if (!source.url || !isPublicProfileUrl(source.url) || seen.has(source.url)) return false;
+      seen.add(source.url);
+      return true;
+    });
 }
 
 function deriveCandidateName(talent: Talent, index: number) {
@@ -722,6 +745,10 @@ function extractNameFromLinkedInUrl(value?: string) {
   return slug.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function firstHttpUrl(...values: Array<string | undefined>) {
+  return values.find((value) => isHttpUrl(value)) || "";
+}
+
 function isLikelyDisplayName(value?: string) {
   const text = cleanText(value, "");
   if (!text || text.length < 2 || text.length > 60) return false;
@@ -732,6 +759,17 @@ function isLikelyDisplayName(value?: string) {
 
 function isHttpUrl(value?: string) {
   return /^https?:\/\//i.test(cleanText(value, ""));
+}
+
+function isPublicProfileUrl(value?: string) {
+  const url = cleanText(value, "");
+  if (/^https?:\/\/([^/]+\.)?linkedin\.com\/in\/[^/?#]+/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?github\.com\/(?!orgs\/|features|enterprise|marketplace|topics|collections|events|settings|login|signup|explore|jobs|about|pricing|search)[^/?#]+\/?$/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?zhihu\.com\/people\/[^/?#]+/i.test(url)) return true;
+  if (/^https?:\/\/(x\.com|([^/]+\.)?twitter\.com)\/(?!home|i\/|share|intent|search|notifications|messages)[^/?#]+\/?$/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?medium\.com\/(@[^/?#]+|[^/?#]+)\/?$/i.test(url)) return true;
+  if (/^https?:\/\/([^/]+\.)?substack\.com\/?(?!p\/|archive|about)/i.test(url)) return true;
+  return false;
 }
 
 function EvidenceGroup({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
