@@ -531,14 +531,18 @@ function detectMatureRoleFamily(text) {
   const families = [
     { regex: /(^|[\s/|,，、()（）-])OD($|[\s/|,，、()（）-])|组织发展|組織發展|Organization Development|Organizational Development|组织效能|人才发展|People Analytics/i, search_role: 'OD 组织发展 People Analytics HR数字化 人才发展 组织效能', keywords: ['OD', '组织发展', 'Organization Development', 'People Analytics', 'HR数字化', '人才发展', '组织效能'], capability_keywords: ['People Analytics', 'HR数字化'] },
     { regex: /(GTM|Go[-\s]?to[-\s]?Market|商业化|增长|Growth|市场|Marketing|获客|企业客户增长|Revenue)/i, search_role: 'GTM 增长 市场 商业化 Revenue Growth 企业客户增长', keywords: ['GTM', '增长', '市场', '商业化', 'Growth', 'Revenue', '企业客户增长'], capability_keywords: [] },
-    { regex: /(HR|人力资源|招聘|Recruiting|Talent Acquisition|人才|组织人才|People Ops|People Operations)/i, search_role: 'HR 人力资源 招聘 Talent Acquisition People Operations 人才发展', keywords: ['HR', '人力资源', '招聘', 'Talent Acquisition', 'People Operations', '人才发展'], capability_keywords: [] },
+    { regex: /(^|[\s/|,，、()（）-])HR($|[\s/|,，、()（）-])|人力资源|招聘|Recruiting|Talent Acquisition|人才|组织人才|People Ops|People Operations/i, search_role: 'HR 人力资源 招聘 Talent Acquisition People Operations 人才发展', keywords: ['HR', '人力资源', '招聘', 'Talent Acquisition', 'People Operations', '人才发展'], capability_keywords: [] },
     { regex: /(RevOps|Revenue Operations|SalesOps|Sales Operations|销售运营|销售|Sales|客户增长|商务运营)/i, search_role: 'RevOps SalesOps 销售运营 Revenue Operations 商务运营', keywords: ['RevOps', 'SalesOps', '销售运营', 'Revenue Operations', '商务运营'], capability_keywords: [] },
-    { regex: /(产品|Product|PM|Product Manager|产品经理|产品负责人)/i, search_role: '产品经理 Product Manager 产品负责人 产品策略', keywords: ['产品经理', 'Product Manager', '产品负责人', '产品策略'], capability_keywords: [] },
+    { regex: /产品|Product|(^|[\s/|,，、()（）-])PM($|[\s/|,，、()（）-])|Product Manager|产品经理|产品负责人/i, search_role: '产品经理 Product Manager 产品负责人 产品策略', keywords: ['产品经理', 'Product Manager', '产品负责人', '产品策略'], capability_keywords: [] },
     { regex: /(Customer Success|CSM|客户成功|客户运营|售后成功)/i, search_role: '客户成功 Customer Success 客户运营 CSM', keywords: ['客户成功', 'Customer Success', '客户运营', 'CSM'], capability_keywords: [] },
-    { regex: /(数据|Data|Analytics|BI|商业分析|Business Analyst|数据分析)/i, search_role: '数据分析 Analytics BI 商业分析 Data Analyst', keywords: ['数据分析', 'Analytics', 'BI', '商业分析', 'Data Analyst'], capability_keywords: [] },
+    { regex: /数据|Data|Analytics|(^|[\s/|,，、()（）-])BI($|[\s/|,，、()（）-])|商业分析|Business Analyst|数据分析/i, search_role: '数据分析 Analytics BI 商业分析 Data Analyst', keywords: ['数据分析', 'Analytics', 'BI', '商业分析', 'Data Analyst'], capability_keywords: [] },
     { regex: /(运营|Operations|业务运营|策略运营|平台运营|内容运营|电商运营)/i, search_role: '运营 Operations 业务运营 策略运营 平台运营', keywords: ['运营', 'Operations', '业务运营', '策略运营', '平台运营'], capability_keywords: [] },
     { regex: /(Finance|财务|财务运营|FP&A|经营分析)/i, search_role: '财务运营 FP&A 经营分析 Finance Operations', keywords: ['财务运营', 'FP&A', '经营分析', 'Finance Operations'], capability_keywords: [] },
     { regex: /(法务|Legal|合规|Compliance|风控|Risk)/i, search_role: '法务 合规 风控 Legal Compliance Risk', keywords: ['法务', '合规', '风控', 'Legal', 'Compliance', 'Risk'], capability_keywords: [] },
+    { regex: /研发|工程|Engineering|Engineer|技术|架构|后端|前端|全栈|算法|Machine Learning|(^|[\s/|,，、()（）-])ML($|[\s/|,，、()（）-])|大模型|(^|[\s/|,，、()（）-])LLM($|[\s/|,，、()（）-])|MLOps/i, search_role: '工程研发 Engineering 算法 机器学习 MLOps 技术架构', keywords: ['工程研发', 'Engineering', 'Engineer', '算法', 'Machine Learning', 'MLOps', '技术架构'], capability_keywords: [] },
+    { regex: /设计|Design|Designer|用户体验|(^|[\s/|,，、()（）-])UX($|[\s/|,，、()（）-])|(^|[\s/|,，、()（）-])UI($|[\s/|,，、()（）-])|交互|视觉|体验设计|Researcher|用户研究/i, search_role: '设计 UX UI 体验设计 用户研究 Design', keywords: ['设计', 'UX', 'UI', '体验设计', '用户研究', 'Design'], capability_keywords: [] },
+    { regex: /内容|Content|社区|Community|创作者|Creator|品牌|Brand|公关|(^|[\s/|,，、()（）-])PR($|[\s/|,，、()（）-])/i, search_role: '内容运营 社区 品牌 公关 Content Community Brand', keywords: ['内容运营', '社区', '品牌', '公关', 'Content', 'Community', 'Brand'], capability_keywords: [] },
+    { regex: /(供应链|Supply Chain|采购|Procurement|物流|Logistics|履约|Fulfillment)/i, search_role: '供应链 采购 物流 履约 Supply Chain Procurement Logistics', keywords: ['供应链', '采购', '物流', '履约', 'Supply Chain', 'Procurement', 'Logistics'], capability_keywords: [] },
   ];
   return families.find(item => item.regex.test(text)) || null;
 }
@@ -802,6 +806,9 @@ function filterLinkedInProfileResults(results, company, role, searchIntent) {
 async function evaluateCandidateFit(ai, candidates, input, searchIntent) {
   const pool = candidates.slice(0, 40);
   if (!pool.length) return [];
+  const roleDecomposition = searchIntent?.role_decomposition || {};
+  const matureRoleBody = normalizeText(roleDecomposition.search_role || input.target_role || '');
+  const capabilityBody = unique(roleDecomposition.capability_keywords || []).slice(0, 8).join('、');
   const reviews = [];
   for (let offset = 0; offset < pool.length; offset += 20) {
     const batch = pool.slice(offset, offset + 20);
@@ -813,12 +820,14 @@ async function evaluateCandidateFit(ai, candidates, input, searchIntent) {
 - 核心职责/任务: ${input.core_tasks || '未填写'}
 - 地区/来源偏好: ${input.location_preference || input.source_preference || '未填写'}
 - 搜索意图: ${searchIntent?.rewritten_intent || searchIntent?.search_sentence || ''}
+- 成熟岗位主体/相邻来源: ${matureRoleBody || '未拆解'}
+- 新兴能力/加分能力: ${capabilityBody || '未拆解'}
 
 判断原则:
 1. 只根据候选人的公开资料标题、摘要、公司、链接判断；证据不足要降分，不能脑补履历。
 2. 高分候选人必须在职能方向、业务阶段、职责关键词、公司/行业背景上整体匹配。
 3. 信息不足时不要直接 reject，应给 weak/possible 并写 risk；只有明显不是人、纯技术文档、公司页、招聘页、岗位页、课程页、学生/实习生或明显无关职能才 reject。
-4. 如果目标岗位是新兴复合岗位，只要候选人匹配成熟岗位主体（如组织发展/人才发展/HR数字化/People Analytics），但缺少明确 AI/Agent/工具构建证据，应判为 weak 或 possible，并把“AI能力待验证”写入 risk，不要因为缺少新兴能力证据直接 reject。
+4. 如果目标岗位是新兴复合岗位，只要候选人匹配上面的“成熟岗位主体/相邻来源”，但缺少明确的新兴能力证据，应判为 weak 或 possible，并把缺失能力写入 risk，不要因为缺少新兴能力证据直接 reject。
 5. 只是网页里出现某个关键词不代表匹配，要结合 title/snippet/company/url 形成判断。
 6. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
 7. 不要新增候选人，只评估给定 index。
@@ -1081,16 +1090,46 @@ function inferAdjacentRoleTerms(text) {
   if (/(OD|组织发展|Organization Development|People Analytics|HR数字化|人才发展|组织效能|人力资源)/i.test(value)) {
     terms.push('组织发展', '人才发展', 'People Analytics', 'HR数字化', '组织效能', 'HRBP');
   }
-  if (/(GTM|增长|市场|商业化|Revenue|Growth)/i.test(value)) {
-    terms.push('GTM', '增长', '商业化', '市场', 'Revenue Growth');
+  if (/(^|[\s/|,，、()（）-])HR($|[\s/|,，、()（）-])|人力资源|招聘|Recruiting|Talent Acquisition|People Operations/i.test(value)) {
+    terms.push('HR', '人力资源', '招聘', 'Talent Acquisition', 'People Operations', 'HRBP');
   }
-  if (/(RevOps|SalesOps|销售运营|Revenue Operations)/i.test(value)) {
+  if (/(RevOps|SalesOps|销售运营|Revenue Operations|商务运营)/i.test(value)) {
     terms.push('RevOps', 'SalesOps', '销售运营', 'Revenue Operations');
   }
-  if (/(产品|Product|Product Manager|产品经理)/i.test(value)) {
+  if (/(Finance|财务|财务运营|FP&A|经营分析)/i.test(value)) {
+    terms.push('财务运营', 'FP&A', '经营分析', 'Finance Operations');
+  }
+  if (/(Customer Success|CSM|客户成功|客户运营)/i.test(value)) {
+    terms.push('客户成功', 'Customer Success', 'CSM', '客户运营');
+  }
+  if (/产品|Product|Product Manager|产品经理|(^|[\s/|,，、()（）-])PM($|[\s/|,，、()（）-])/i.test(value)) {
     terms.push('产品经理', 'Product Manager', '产品负责人');
   }
-  return terms;
+  if (/(GTM|增长|市场|商业化|Go[-\s]?to[-\s]?Market|企业客户增长|\bGrowth\b)/i.test(value)) {
+    terms.push('GTM', '增长', '商业化', '市场', 'Revenue Growth');
+  }
+  if (/(法务|Legal|合规|Compliance|风控|Risk)/i.test(value)) {
+    terms.push('法务', '合规', '风控', 'Legal', 'Compliance', 'Risk');
+  }
+  if (/数据|Data|Analytics|(^|[\s/|,，、()（）-])BI($|[\s/|,，、()（）-])|商业分析|Data Analyst|Business Analyst/i.test(value)) {
+    terms.push('数据分析', 'Data Analyst', 'Analytics', 'BI', '商业分析');
+  }
+  if (/研发|工程|Engineering|Engineer|技术|架构|后端|前端|全栈|算法|Machine Learning|(^|[\s/|,，、()（）-])ML($|[\s/|,，、()（）-])|MLOps/i.test(value)) {
+    terms.push('工程研发', 'Engineer', '技术架构', '算法', 'Machine Learning', 'MLOps');
+  }
+  if (/设计|Design|Designer|用户体验|(^|[\s/|,，、()（）-])UX($|[\s/|,，、()（）-])|(^|[\s/|,，、()（）-])UI($|[\s/|,，、()（）-])|交互|视觉|体验设计|用户研究/i.test(value)) {
+    terms.push('设计', 'Designer', 'UX', 'UI', '体验设计', '用户研究');
+  }
+  if (/内容|Content|社区|Community|品牌|Brand|公关|(^|[\s/|,，、()（）-])PR($|[\s/|,，、()（）-])/i.test(value)) {
+    terms.push('内容运营', 'Content', '社区', 'Community', '品牌', 'Brand');
+  }
+  if (/(供应链|Supply Chain|采购|Procurement|物流|Logistics|履约|Fulfillment)/i.test(value)) {
+    terms.push('供应链', 'Supply Chain', '采购', 'Procurement', '物流', 'Logistics');
+  }
+  if (/(运营|Operations|业务运营|策略运营|平台运营|内容运营|电商运营)/i.test(value) && !/(RevOps|SalesOps|Finance Operations|Customer Success|财务|客户成功|销售运营)/i.test(value)) {
+    terms.push('运营', 'Operations', '业务运营', '策略运营', '平台运营');
+  }
+  return unique(terms);
 }
 
 function isUsefulProfileRoleTerm(term) {
@@ -1111,7 +1150,7 @@ function buildCompactLocationClause(searchIntent) {
 
 function buildCapabilityQueryTerms(searchIntent) {
   const terms = unique(searchIntent?.capability_keywords || searchIntent?.role_decomposition?.capability_keywords || [])
-    .filter(term => /AI|Agent|智能体|大模型|LLM|数字化|数据|Analytics/i.test(term))
+    .filter(term => /AI|Agent|智能体|Copilot|大模型|LLM|自动化|Automation|Workflow|工作流|数字化|数据|Analytics/i.test(term))
     .filter(term => normalizeText(term).length <= 24)
     .slice(0, 4);
   if (!terms.length) return '';
