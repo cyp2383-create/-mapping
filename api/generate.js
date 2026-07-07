@@ -164,6 +164,9 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
       location:e.location||'',
       match_score:t.ai_fit_score||t.match_score||0,
       fit_decision:t.fit_decision||'unreviewed',
+      match_path:t.match_path||'adjacent_backup',
+      match_path_label:t.match_path_label||getMatchPathLabel(t.match_path),
+      match_path_reason:t.match_path_reason||'',
       sources: buildTalentSources(t),
       match_reasons:t.fit_reasons?.length ? t.fit_reasons : buildMatchReasons(t, searchInput, searchIntent),
       verification_needed:t.risk_flags?.length ? t.risk_flags : ['实际职责范围', '团队规模与业务阶段', '可触达性与求职意愿'],
@@ -904,9 +907,15 @@ async function evaluateCandidateFit(ai, candidates, input, searchIntent) {
 2. 高分候选人必须在职能方向、业务阶段、职责关键词、公司/行业背景上整体匹配。
 3. 信息不足时不要直接 reject，应给 weak/possible 并写 risk；只有明显不是人、纯技术文档、公司页、招聘页、岗位页、课程页、学生/实习生或明显无关职能才 reject。
 4. 如果目标岗位是新兴复合岗位，只要候选人匹配上面的“成熟岗位主体/相邻来源”，但缺少明确的新兴能力证据，应判为 weak 或 possible，并把缺失能力写入 risk，不要因为缺少新兴能力证据直接 reject。
-5. 只是网页里出现某个关键词不代表匹配，要结合 title/snippet/company/url 形成判断。
-6. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
-7. 不要新增候选人，只评估给定 index。
+5. 对所有新兴复合岗位都要拆成“成熟职能主体 + 新兴能力/场景能力”来判断，不要只按用户原始岗位名精确匹配。
+6. 请为每个非 reject 候选人归入一个匹配路径:
+   - ideal: 成熟职能主体和新兴能力都有公开证据，优先推荐。
+   - function_body_capability_unverified: 成熟职能主体匹配，但新兴能力证据不足，需要追问/验证。
+   - capability_body_scenario_unverified: 新兴能力匹配，但目标业务场景或成熟职能主体证据不足，需要验证迁移性。
+   - adjacent_backup: 相邻职能/相邻行业可作为备选，但关键条件不足。
+7. 只是网页里出现某个关键词不代表匹配，要结合 title/snippet/company/url 形成判断。
+8. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
+9. 不要新增候选人，只评估给定 index。
 
 返回严格 JSON 数组，每条格式:
 [
@@ -916,6 +925,8 @@ async function evaluateCandidateFit(ai, candidates, input, searchIntent) {
     "decision": "strong|possible|weak|reject",
     "fit_reasons": ["具体为什么匹配，最多3条"],
     "risk_flags": ["需要验证或不匹配风险，最多3条"],
+    "match_path": "ideal|function_body_capability_unverified|capability_body_scenario_unverified|adjacent_backup|reject",
+    "match_path_reason": "一句话说明为什么归入这个路径",
     "inferred_role": "从公开资料判断的角色",
     "inferred_company": "从公开资料判断的公司"
   }
@@ -950,14 +961,17 @@ search_query: ${normalizeText(item.search_query).slice(0, 260)}`;
         fit_decision: 'unreviewed',
         fit_reasons: buildFallbackFitReasons(candidate),
         risk_flags: ['AI匹配评估失败，需人工复核'],
+        ...deriveCandidateMatchPath(candidate, null, input, searchIntent),
       };
     }
+    const matchPath = deriveCandidateMatchPath(candidate, review, input, searchIntent);
     return {
       ...candidate,
       ai_fit_score: review.fit_score,
       fit_decision: review.decision,
       fit_reasons: review.fit_reasons,
       risk_flags: review.risk_flags,
+      ...matchPath,
       inferred_role: review.inferred_role,
       inferred_company: review.inferred_company,
       company: review.inferred_company || candidate.company,
@@ -1002,6 +1016,8 @@ function normalizeFitReview(row) {
     decision,
     fit_reasons: normalizeStringArray(row?.fit_reasons).slice(0, 3),
     risk_flags: normalizeStringArray(row?.risk_flags).slice(0, 3),
+    match_path: normalizeMatchPath(row?.match_path, decision, fitScore),
+    match_path_reason: normalizeText(row?.match_path_reason).slice(0, 180),
     inferred_role: normalizeText(row?.inferred_role).slice(0, 120),
     inferred_company: normalizeText(row?.inferred_company).slice(0, 120),
   };
@@ -1014,6 +1030,95 @@ function normalizeFitDecision(value, score) {
   if (score >= 55) return 'possible';
   if (score >= 40) return 'weak';
   return 'reject';
+}
+
+function normalizeMatchPath(value, decision = '', score = 0) {
+  const text = normalizeText(value).toLowerCase();
+  if (['ideal', 'function_body_capability_unverified', 'capability_body_scenario_unverified', 'adjacent_backup', 'reject'].includes(text)) return text;
+  if (decision === 'reject' || score < 30) return 'reject';
+  if (score >= 75) return 'ideal';
+  if (score >= 55) return 'function_body_capability_unverified';
+  return 'adjacent_backup';
+}
+
+function deriveCandidateMatchPath(candidate, review, input, searchIntent) {
+  const decision = review?.decision || candidate?.fit_decision || 'unreviewed';
+  const score = review?.fit_score ?? candidate?.ai_fit_score ?? candidate?.match_score ?? 0;
+  const requestedPath = normalizeMatchPath(review?.match_path, decision, score);
+  if (requestedPath && requestedPath !== 'reject' && review?.match_path) {
+    return buildMatchPathResult(requestedPath, review?.match_path_reason);
+  }
+  if (decision === 'reject' || score < 30) {
+    return buildMatchPathResult('reject', review?.match_path_reason);
+  }
+
+  const evidence = normalizeText([
+    candidate?.title,
+    candidate?.company,
+    candidate?.snippet,
+    candidate?.url,
+    candidate?.search_query,
+    ...(candidate?.sources || []).flatMap(source => [source?.title, source?.snippet, source?.url])
+  ].filter(Boolean).join(' '));
+  const functionTerms = getFunctionBodyTerms(input, searchIntent);
+  const capabilityTerms = getCapabilityBodyTerms(searchIntent);
+  const hasFunctionBody = functionTerms.some(term => includesLoose(evidence, term));
+  const hasCapabilityBody = capabilityTerms.some(term => includesLoose(evidence, term));
+
+  if (hasFunctionBody && hasCapabilityBody && score >= 55) {
+    return buildMatchPathResult('ideal', review?.match_path_reason || '公开资料同时覆盖成熟职能主体和新兴能力线索');
+  }
+  if (hasFunctionBody) {
+    return buildMatchPathResult('function_body_capability_unverified', review?.match_path_reason || '成熟职能主体匹配，新兴能力需要进一步验证');
+  }
+  if (hasCapabilityBody) {
+    return buildMatchPathResult('capability_body_scenario_unverified', review?.match_path_reason || '新兴能力有线索，目标业务场景或职能迁移性需要验证');
+  }
+  return buildMatchPathResult('adjacent_backup', review?.match_path_reason || '公开资料仅显示相邻背景，需人工复核关键条件');
+}
+
+function buildMatchPathResult(path, reason = '') {
+  const normalizedPath = normalizeMatchPath(path, path === 'reject' ? 'reject' : 'possible', path === 'reject' ? 0 : 55);
+  return {
+    match_path: normalizedPath,
+    match_path_label: getMatchPathLabel(normalizedPath),
+    match_path_reason: normalizeText(reason).slice(0, 180),
+  };
+}
+
+function getMatchPathLabel(path) {
+  const labels = {
+    ideal: '理想匹配',
+    function_body_capability_unverified: '职能主体，能力待验证',
+    capability_body_scenario_unverified: '能力主体，场景待验证',
+    adjacent_backup: '相邻备选',
+    reject: '不推荐',
+  };
+  return labels[path] || labels.adjacent_backup;
+}
+
+function getFunctionBodyTerms(input, searchIntent) {
+  const decomp = searchIntent?.role_decomposition || {};
+  return unique([
+    decomp.search_role,
+    ...(decomp.role_keywords || []),
+    ...(searchIntent?.role_keywords || []),
+    ...inferAdjacentRoleTerms(`${input?.target_role || ''} ${decomp.search_role || ''}`),
+    ...extractSearchTokens(decomp.search_role || input?.target_role || ''),
+  ])
+    .filter(term => !isAvoidedExactRole(term, decomp))
+    .filter(isUsefulProfileRoleTerm)
+    .slice(0, 16);
+}
+
+function getCapabilityBodyTerms(searchIntent) {
+  const decomp = searchIntent?.role_decomposition || {};
+  return unique([
+    ...(decomp.capability_keywords || []),
+    ...(searchIntent?.capability_keywords || []),
+  ])
+    .filter(term => term.length >= 2)
+    .slice(0, 16);
 }
 
 function normalizeStringArray(value) {
@@ -1530,7 +1635,22 @@ function scoreProfileResult(result, role, searchIntent) {
 }
 
 function sortTalentRowsByMatch(rows) {
-  return rows.slice().sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+  return rows.slice().sort((a, b) => {
+    const scoreDelta = (b.match_score || 0) - (a.match_score || 0);
+    if (scoreDelta) return scoreDelta;
+    return getMatchPathPriority(a.match_path) - getMatchPathPriority(b.match_path);
+  });
+}
+
+function getMatchPathPriority(path) {
+  const priorities = {
+    ideal: 0,
+    function_body_capability_unverified: 1,
+    capability_body_scenario_unverified: 2,
+    adjacent_backup: 3,
+    reject: 9,
+  };
+  return priorities[path] ?? priorities.adjacent_backup;
 }
 
 function filterTalentRowsByLocation(rows, searchIntent) {
