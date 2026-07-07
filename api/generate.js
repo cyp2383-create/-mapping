@@ -364,6 +364,7 @@ function turso() {
 async function initTables() {
   const db = turso();
   await db.execute("CREATE TABLE IF NOT EXISTS positions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, industry TEXT, role_direction TEXT, talent_data TEXT, jd_data TEXT, report_html TEXT, created_at TEXT DEFAULT (datetime()))");
+  try { await db.execute("ALTER TABLE positions ADD COLUMN updated_at TEXT"); } catch {}
 }
 
 // ===== DeepSeek batch enrichment =====
@@ -425,8 +426,9 @@ async function storeResults(industry, role, talentRows, jdRows) {
     return existingId;
   }
 
-  await db.execute(
+  const inserted = await db.execute(
     "INSERT INTO positions (name, industry, role_direction, talent_data, jd_data, report_html) VALUES (?,?,?,?,?,?)",
     [pname, indSafe, roleSafe, tjson, jjson, rjson]
   );
+  return inserted.lastInsertId || 0;
 }
