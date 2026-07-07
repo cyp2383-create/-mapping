@@ -264,6 +264,10 @@ export default function HomeClient({ initialPayload }: { initialPayload?: Latest
             } else if (event.step === "report_progress") {
               setProgress(Math.min(95, event.progress || progress));
               setStatus(`生成报告：${event.text || "正在组织分析内容"}`);
+            } else if (event.step === "error") {
+              setStatus(`生成失败：${event.text || event.error || "旧 API 返回错误"}`);
+              setRunning(false);
+              return;
             } else if (event.progress) {
               setProgress(event.progress);
               const stepKey = event.step || "processing";
