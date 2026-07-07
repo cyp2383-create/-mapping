@@ -128,8 +128,7 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
   send({step:'jds',text:`找到${jds.length}条JD`,progress:35});
 
   send({step:'talents',text:'搜索候选人...',progress:40});
-  const talents = await searchLinkedIn(tavily, companies.slice(0,6), role, searchIntent);
-  await enrichTalentSources(tavily, talents, role, companySignals, jds);
+  const talents = await searchLinkedIn(tavily, companies, role, searchIntent);
   send({step:'talents',text:`找到${talents.length}位候选人`,progress:55});
 
   // Deep enrichment: extract hidden fields from snippets (parallel)
@@ -153,13 +152,14 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
       education:e.education||'', languages:e.languages||'',
       certifications:e.certifications||'', influence_score:e.influence_score||0,
       location:e.location||'',
-      sources: buildTalentSources(t, companySignals, jds),
+      match_score:t.match_score||0,
+      sources: buildTalentSources(t),
       match_reasons: buildMatchReasons(t, searchInput, searchIntent),
       verification_needed: ['实际职责范围', '团队规模与业务阶段', '可触达性与求职意愿'],
       search_queries: searchIntent.search_queries,
     };
   });
-  talentRows = filterTalentRowsByLocation(talentRows, searchIntent);
+  talentRows = sortTalentRowsByMatch(filterTalentRowsByLocation(talentRows, searchIntent));
 
   const jdRows = jds.slice(0,30).map((j, i) => {
     const e = enrichedJ[i] || {};
@@ -520,11 +520,16 @@ async function searchCompanyPages(tav, companies, searchIntent) {
 
 async function searchLinkedIn(tav, companies, role, searchIntent) {
   const people = [];
-  for (const c of companies.slice(0,8)) {
-    const results = await searchLinkedInProfilesForCompany(tav, c.name, role, 3, searchIntent);
+  for (const c of companies.slice(0,10)) {
+    const results = await searchLinkedInProfilesForCompany(tav, c.name, role, 5, searchIntent);
     results.forEach(r => people.push(r));
   }
-  return dedupeByProfileUrl(people).slice(0,40);
+  let ranked = rankProfileResults(dedupeByProfileUrl(people), role, searchIntent);
+  if (ranked.length < 5) {
+    const broader = await searchBroaderLinkedInProfiles(tav, role, searchIntent, companies, 5 - ranked.length);
+    ranked = rankProfileResults(dedupeByProfileUrl([...ranked, ...broader]), role, searchIntent);
+  }
+  return ranked.slice(0,40);
 }
 
 async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3, searchIntent) {
@@ -532,19 +537,61 @@ async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3
   const roleName = normalizeText(role);
   const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
   const locationClause = buildLocationQueryClause(searchIntent);
-  const query = `site:linkedin.com/in/ "${searchSentence}" "${companyName}" ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`;
+  const roleQuery = buildRoleQueryTerms(roleName, searchIntent);
+  const queries = [
+    `site:linkedin.com/in/ "${companyName}" ${roleQuery} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    `site:linkedin.com/in/ "${companyName}" ${searchSentence} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
+  ].map(normalizeText).filter(Boolean);
 
-  const results = await tav.search(query, maxResults);
-  const collected = filterLinkedInProfileResults(results, companyName, roleName, searchIntent);
+  let collected = [];
+  for (const query of queries) {
+    const results = await tav.search(query, maxResults);
+    filterLinkedInProfileResults(results, companyName, roleName, searchIntent)
+      .forEach(r => collected.push({...r, company: companyName, search_query: query}));
+    collected = dedupeByProfileUrl(collected);
+    if (collected.length >= 2) break;
+  }
 
-  const strict = rankProfileResultsByLocation(dedupeByProfileUrl(collected), searchIntent);
-  return strict.slice(0, maxResults).map(r => ({...r, company: companyName, search_query: query}));
+  return rankProfileResults(dedupeByProfileUrl(collected), roleName, searchIntent).slice(0, maxResults);
+}
+
+async function searchBroaderLinkedInProfiles(tav, role, searchIntent, companies, needed=5) {
+  const roleName = normalizeText(role);
+  const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
+  const locationClause = buildLocationQueryClause(searchIntent);
+  const roleQuery = buildRoleQueryTerms(roleName, searchIntent);
+  const companyTerms = companies
+    .slice(0, 6)
+    .map(c => normalizeText(getCompanyName(c)))
+    .filter(Boolean)
+    .map(name => `"${name}"`)
+    .join(' OR ');
+  const queries = [
+    `site:linkedin.com/in/ ${roleQuery} ${locationClause} ${companyTerms} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    `(site:github.com OR site:zhihu.com/people OR site:x.com OR site:twitter.com OR site:medium.com OR site:substack.com) ${roleQuery} ${locationClause} ${companyTerms} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    `${searchSentence} ${locationClause} 个人主页 GitHub 知乎 Medium Substack X Twitter -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    `site:linkedin.com/in/ ${searchSentence} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    ...(searchIntent?.candidate_queries || []).slice(0, 2).map(q => `site:linkedin.com/in/ ${q} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`)
+  ].map(normalizeText).filter(Boolean);
+
+  const collected = [];
+  for (const query of queries) {
+    const results = await tav.search(query, Math.max(needed + 2, 5));
+    filterLinkedInProfileResults(results, '', roleName, searchIntent)
+      .forEach(r => collected.push({...r, company: extractCompanyFromTitle(r.title) || '', search_query: query}));
+    if (dedupeByProfileUrl(collected).length >= needed) break;
+  }
+  return rankProfileResults(dedupeByProfileUrl(collected), roleName, searchIntent).slice(0, Math.max(needed, 5));
 }
 
 function filterLinkedInProfileResults(results, company, role, searchIntent) {
-  const roleTokens = extractSearchTokens(role);
+  const roleTokens = [
+    ...extractSearchTokens(role),
+    ...(searchIntent?.role_keywords || []),
+    ...extractSearchTokens(searchIntent?.search_sentence || '').slice(0, 6)
+  ].map(normalizeText).filter(Boolean);
   const filtered = results.filter(r => {
-    if (!isLinkedInProfileUrl(r)) return false;
+    if (!isPublicPersonProfileUrl(r)) return false;
     if (looksLikeNonPersonResult(r)) return false;
     if (!passesLocationConstraint(r, searchIntent)) return false;
 
@@ -553,9 +600,7 @@ function filterLinkedInProfileResults(results, company, role, searchIntent) {
     const hasRole = roleTokens.length ? roleTokens.some(token => includesLoose(text, token)) : false;
     return hasCompany || hasRole;
   });
-  if (!hasChinaLocationPreference(searchIntent)) return filtered;
-  const chinaResults = filtered.filter(r => hasChinaSignal(`${r.title || ''} ${r.snippet || ''} ${r.url || ''}`, searchIntent));
-  return chinaResults;
+  return filtered;
 }
 
 function isLinkedInProfileUrl(result) {
@@ -570,6 +615,28 @@ function isLinkedInProfileUrl(result) {
   } catch {
     return false;
   }
+}
+
+function isPublicPersonProfileUrl(result) {
+  if (isLinkedInProfileUrl(result)) return true;
+  try {
+    const url = new URL(result?.url || '');
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (host.endsWith('github.com')) return parts.length === 1 && !isReservedProfileSlug(parts[0]);
+    if (host.endsWith('zhihu.com')) return parts[0] === 'people' && !!parts[1];
+    if (host === 'x.com' || host.endsWith('twitter.com')) return parts.length === 1 && !isReservedProfileSlug(parts[0]);
+    if (host.endsWith('medium.com')) return parts[0]?.startsWith('@') || parts.length === 1;
+    if (host.endsWith('substack.com')) return !/(\/p\/|\/post\/|\/archive|\/about)/i.test(url.pathname);
+    if (isCompanyOrTeamSource(result)) return false;
+    return ['personal_site'].includes(detectPlatform(result?.url || ''));
+  } catch {
+    return false;
+  }
+}
+
+function isReservedProfileSlug(slug) {
+  return /^(orgs|organizations|features|enterprise|marketplace|topics|collections|events|settings|login|signup|explore|jobs|careers|about|company|companies|school|learning|pulse|posts|feed|showcase|help|advice|search|notifications|messages|home|i|share|intent)$/i.test(normalizeText(slug));
 }
 
 function looksLikeNonPersonResult(result) {
@@ -599,8 +666,15 @@ function canonicalProfileUrl(rawUrl) {
   try {
     const url = new URL(rawUrl || '');
     const host = url.hostname.toLowerCase().replace(/^www\./, '');
-    if (!host.endsWith('linkedin.com')) return '';
+    if (!isPublicPersonProfileUrl({url: rawUrl})) return '';
     const parts = url.pathname.split('/').filter(Boolean);
+    if (!host.endsWith('linkedin.com')) {
+      if (host.endsWith('github.com') || host === 'x.com' || host.endsWith('twitter.com') || host.endsWith('medium.com')) {
+        return `${url.protocol}//${host}/${parts[0] || ''}`.replace(/\/$/, '');
+      }
+      if (host.endsWith('zhihu.com') && parts[0] === 'people' && parts[1]) return `${url.protocol}//${host}/people/${parts[1]}`;
+      return `${url.protocol}//${host}${url.pathname.replace(/\/+$/, '')}`;
+    }
     if (parts[0]?.toLowerCase() !== 'in' || !parts[1]) return '';
     return `https://www.linkedin.com/in/${parts[1].replace(/\/+$/, '')}`;
   } catch {
@@ -614,6 +688,16 @@ function extractSearchTokens(value) {
     .map(t => t.trim())
     .filter(t => t.length >= 2 && !['and','or','the','for','with'].includes(t.toLowerCase()))
     .slice(0, 8);
+}
+
+function buildRoleQueryTerms(role, searchIntent) {
+  const tokens = [
+    role,
+    ...(searchIntent?.role_keywords || []),
+    ...extractSearchTokens(searchIntent?.search_sentence || '').slice(0, 4)
+  ].map(normalizeText).filter(Boolean);
+  const unique = [...new Set(tokens)].slice(0, 8);
+  return unique.map(term => term.length > 18 ? term : `"${term}"`).join(' ');
 }
 
 function normalizeText(value) {
@@ -675,6 +759,39 @@ function rankProfileResultsByLocation(results, searchIntent) {
   return results.slice().sort((a, b) => Number(hasChinaSignal(`${b.title || ''} ${b.snippet || ''} ${b.url || ''}`, searchIntent)) - Number(hasChinaSignal(`${a.title || ''} ${a.snippet || ''} ${a.url || ''}`, searchIntent)));
 }
 
+function rankProfileResults(results, role, searchIntent) {
+  return results
+    .map(result => ({...result, match_score: scoreProfileResult(result, role, searchIntent)}))
+    .sort((a, b) => b.match_score - a.match_score);
+}
+
+function scoreProfileResult(result, role, searchIntent) {
+  const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${result?.company || ''}`).toLowerCase();
+  const roleText = normalizeText(role).toLowerCase();
+  const company = normalizeText(result?.company).toLowerCase();
+  let score = 100;
+  if (isLinkedInProfileUrl(result)) score += 20;
+  else if (isPublicPersonProfileUrl(result)) score += 12;
+  if (company && text.includes(company)) score += 24;
+  if (roleText && text.includes(roleText)) score += 30;
+  for (const token of (searchIntent?.role_keywords || [])) {
+    const normalized = normalizeText(token).toLowerCase();
+    if (normalized && text.includes(normalized)) score += 10;
+  }
+  for (const token of extractSearchTokens(searchIntent?.search_sentence || '').slice(0, 6)) {
+    const normalized = token.toLowerCase();
+    if (normalized && text.includes(normalized)) score += 5;
+  }
+  if (hasChinaLocationPreference(searchIntent) && hasChinaSignal(`${result?.title || ''} ${result?.snippet || ''}`, searchIntent)) score += 18;
+  if (isExplicitForeignSignal(`${result?.title || ''} ${result?.snippet || ''}`)) score -= 80;
+  if (parseLinkedInTalent(result?.title || '', result?.url || '').name) score += 8;
+  return score;
+}
+
+function sortTalentRowsByMatch(rows) {
+  return rows.slice().sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+}
+
 function filterTalentRowsByLocation(rows, searchIntent) {
   if (!hasChinaLocationPreference(searchIntent)) return rows;
   return rows.filter(row => {
@@ -709,22 +826,11 @@ async function enrichTalentSources(tav, talents, role, companySignals, jds) {
   }
 }
 
-function buildTalentSources(talent, companySignals, jds) {
-  const company = normalizeText(talent.company);
+function buildTalentSources(talent) {
   const sources = [];
   if (talent.url) {
     sources.push({type:'person_profile', platform: detectPlatform(talent.url) || 'linkedin', title:talent.title||'', url:talent.url, snippet:talent.snippet||''});
   }
-  (talent.professional_sources || []).forEach(source => sources.push(source));
-  companySignals
-    .filter(item => company && normalizeText(item.company) === company)
-    .slice(0, 1)
-    .forEach(item => sources.push({type:'company_page', platform:item.platform || detectPlatform(item.url), title:item.title||'', url:item.url||'', snippet:item.snippet||''}));
-  const matchedJds = jds
-    .filter(item => company && normalizeText(item.company) === company)
-    .slice(0, 2);
-  const jdSources = matchedJds.length ? matchedJds : jds.slice(0, 1);
-  jdSources.forEach(item => sources.push({type:'job_posting', platform:detectPlatform(item.url), title:item.title||'', url:item.url||'', snippet:item.snippet||''}));
   return dedupeSources(sources);
 }
 
