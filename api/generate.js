@@ -508,36 +508,36 @@ ${domesticInstruction}
 async function searchJDs(tav, companies, role, searchIntent) {
   const jds = []; const now = new Date().getFullYear();
   const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || role);
-  const generalResults = await tav.search(`${searchSentence} 招聘 JD 岗位职责 ${now}`, 4);
+  const generalResults = await tav.search(`${searchSentence} 招聘 JD 岗位职责 ${now}`, 3);
   generalResults.forEach(r => jds.push({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting'}));
-  for (const c of companies.slice(0,12)) {
-    const results = await tav.search(`${searchSentence} ${c.name} 招聘 JD ${now}`, 2);
+  for (const c of companies.slice(0,4)) {
+    const results = await tav.search(`${searchSentence} ${c.name} 招聘 JD ${now}`, 1);
     results.forEach(r => jds.push({...r, company:c.name, source_type:'job_posting'}));
   }
-  return dedupeByUrl(jds).slice(0,25);
+  return dedupeByUrl(jds).slice(0,12);
 }
 
 async function searchCompanyPages(tav, companies, searchIntent) {
   const pages = [];
   const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || '');
-  for (const c of companies.slice(0,8)) {
-    const results = await tav.search(`${searchSentence} ${c.name} official company team careers`, 2);
+  for (const c of companies.slice(0,4)) {
+    const results = await tav.search(`${searchSentence} ${c.name} official company team careers`, 1);
     results
       .filter(isCompanyOrTeamSource)
       .forEach(r => pages.push({...r, company:c.name, type:'company_page', platform: detectPlatform(r.url)}));
   }
-  return dedupeByUrl(pages).slice(0,16);
+  return dedupeByUrl(pages).slice(0,8);
 }
 
 async function searchLinkedIn(tav, companies, role, searchIntent) {
-  const people = [];
-  for (const c of companies.slice(0,10)) {
-    const results = await searchLinkedInProfilesForCompany(tav, c.name, role, 5, searchIntent);
-    results.forEach(r => people.push(r));
-  }
+  const targetCount = 6;
+  const firstRound = await Promise.all(
+    companies.slice(0,6).map(c => searchLinkedInProfilesForCompany(tav, c.name, role, 3, searchIntent))
+  );
+  const people = firstRound.flat();
   let ranked = rankProfileResults(dedupeByProfileUrl(people), role, searchIntent);
-  if (ranked.length < 5) {
-    const broader = await searchBroaderLinkedInProfiles(tav, role, searchIntent, companies, 5 - ranked.length);
+  if (ranked.length < targetCount) {
+    const broader = await searchBroaderLinkedInProfiles(tav, role, searchIntent, companies, targetCount - ranked.length);
     ranked = rankProfileResults(dedupeByProfileUrl([...ranked, ...broader]), role, searchIntent);
   }
   return ranked.slice(0,40);
@@ -555,12 +555,11 @@ async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3
   ].map(normalizeText).filter(Boolean);
 
   let collected = [];
-  for (const query of queries) {
+  for (const query of queries.slice(0, 1)) {
     const results = await tav.search(query, maxResults);
     filterLinkedInProfileResults(results, companyName, roleName, searchIntent)
       .forEach(r => collected.push({...r, company: companyName, search_query: query}));
     collected = dedupeByProfileUrl(collected);
-    if (collected.length >= 2) break;
   }
 
   return rankProfileResults(dedupeByProfileUrl(collected), roleName, searchIntent).slice(0, maxResults);
@@ -578,20 +577,13 @@ async function searchBroaderLinkedInProfiles(tav, role, searchIntent, companies,
     .map(name => `"${name}"`)
     .join(' OR ');
   const queries = [
-    `site:linkedin.com/in/ ${roleQuery} ${locationClause} ${companyTerms} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
-    `(site:github.com OR site:zhihu.com/people OR site:x.com OR site:twitter.com OR site:medium.com OR site:substack.com) ${roleQuery} ${locationClause} ${companyTerms} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
-    `${searchSentence} ${locationClause} 个人主页 GitHub 知乎 Medium Substack X Twitter -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
-    `site:linkedin.com/in/ ${searchSentence} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
-    ...(searchIntent?.candidate_queries || []).slice(0, 2).map(q => `site:linkedin.com/in/ ${q} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`)
+    `(site:linkedin.com/in/ OR site:github.com OR site:zhihu.com/people OR site:x.com OR site:twitter.com OR site:medium.com OR site:substack.com) ${roleQuery} ${searchSentence} ${locationClause} ${companyTerms} 个人主页 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
   ].map(normalizeText).filter(Boolean);
 
-  const collected = [];
-  for (const query of queries) {
-    const results = await tav.search(query, Math.max(needed + 2, 5));
-    filterLinkedInProfileResults(results, '', roleName, searchIntent)
-      .forEach(r => collected.push({...r, company: extractCompanyFromTitle(r.title) || '', search_query: query}));
-    if (dedupeByProfileUrl(collected).length >= needed) break;
-  }
+  const query = queries[0];
+  const results = query ? await tav.search(query, Math.max(needed, 6)) : [];
+  const collected = filterLinkedInProfileResults(results, '', roleName, searchIntent)
+    .map(r => ({...r, company: extractCompanyFromTitle(r.title) || '', search_query: query}));
   return rankProfileResults(dedupeByProfileUrl(collected), roleName, searchIntent).slice(0, Math.max(needed, 5));
 }
 
