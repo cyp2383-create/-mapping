@@ -41,6 +41,10 @@ function createDeepSeek() {
       method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.DEEPSEEK_KEY},
       body:JSON.stringify({model:'deepseek-chat',messages:[{role:'user',content:prompt}],temperature:0.1,max_tokens:maxTokens})
     });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(`DeepSeek HTTP ${resp.status}: ${text.slice(0,200)}`);
+    }
     const d = await resp.json();
     return d.choices?.[0]?.message?.content || '';
   }};
@@ -149,6 +153,12 @@ async function generateMacroReport(ai, tavily, industry, role, city, send) {
   const midTier = talentRows.filter(t=>t.tier==='mid');
   const lowTier = talentRows.filter(t=>t.tier==='low');
 
+  // Persist before data_ready so the frontend can keep a stable position_id.
+  let positionId = 0;
+  try {
+    positionId = await storeResults(industry, role, talentRows, jdRows) || 0;
+  } catch(e) { console.error('storeResults failed:', e.message); }
+
   // PHASE 1: Return data immediately
   send({step:'data_ready',progress:65,
     talents:talentRows, jds:jdRows,
@@ -157,12 +167,6 @@ async function generateMacroReport(ai, tavily, industry, role, city, send) {
     questions:["描述我的业务场景,帮我构建人才画像","从哪家公司挖人最适合我的业务?","这些大厂在AI方面有什么动向?"],
     stage:1, city: city||'', position_id: positionId
   });
-
-  // Await storage to guarantee the row exists before report UPDATE
-  let positionId = 0;
-  try {
-    positionId = await storeResults(industry, role, talentRows, jdRows) || 0;
-  } catch(e) { console.error('storeResults failed:', e.message); }
 
   // PHASE 2: Generate report
   send({step:'report',text:'生成报告...',progress:70});
