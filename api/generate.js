@@ -130,7 +130,15 @@ async function generateMacroReport(ai, tavily, industry, role, city, send, input
   send({step:'talents',text:'搜索候选人...',progress:40});
   const rawTalents = await searchLinkedIn(tavily, companies, role, searchIntent);
   send({step:'talents',text:`找到${rawTalents.length}位候选人，正在判断匹配度...`,progress:50});
-  const talents = await evaluateCandidateFit(ai, rawTalents, searchInput, searchIntent);
+  let talents = await evaluateCandidateFit(ai, rawTalents, searchInput, searchIntent);
+  if (talents.length < 6) {
+    send({step:'talents',text:`AI评估后候选池不足${talents.length}位，补充一轮相邻候选人...`,progress:52});
+    const supplementalTalents = await searchBroaderLinkedInProfiles(tavily, role, searchIntent, companies, 8);
+    const mergedRawTalents = dedupeByProfileUrl([...rawTalents, ...supplementalTalents]);
+    if (mergedRawTalents.length > rawTalents.length) {
+      talents = await evaluateCandidateFit(ai, mergedRawTalents, searchInput, searchIntent);
+    }
+  }
   send({step:'talents',text:`AI评估后保留${talents.length}位候选人`,progress:55});
 
   // Deep enrichment: extract hidden fields from snippets (parallel)
@@ -726,9 +734,7 @@ async function searchCandidateProfilesFirstRound(tav, companies, role, searchInt
 
 async function searchGeneralCandidateProfiles(tav, role, maxResults=8, searchIntent) {
   const roleName = normalizeText(role);
-  const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
-  const roleQuery = buildCandidateRoleQuery(roleName, searchIntent);
-  const query = `${roleQuery} ${searchSentence} 个人主页 公开资料 候选人 领英 LinkedIn GitHub 知乎 脉脉 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`;
+  const query = buildGeneralProfileSearchQuery(roleName, searchIntent);
   const results = await tav.search(normalizeText(query), maxResults);
   return filterLinkedInProfileResults(results, '', roleName, searchIntent)
     .map(r => ({...r, company: extractCompanyFromTitle(r.title) || '', search_query: query}));
@@ -737,11 +743,8 @@ async function searchGeneralCandidateProfiles(tav, role, maxResults=8, searchInt
 async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3, searchIntent) {
   const companyName = normalizeText(getCompanyName(company));
   const roleName = normalizeText(role);
-  const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
-  const roleQuery = buildCandidateRoleQuery(roleName, searchIntent);
   const queries = [
-    `site:linkedin.com/in/ "${companyName}" ${roleQuery} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
-    `site:linkedin.com/in/ "${companyName}" ${searchSentence} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
+    buildCompanyProfileSearchQuery(companyName, roleName, searchIntent)
   ].map(normalizeText).filter(Boolean);
 
   let collected = [];
@@ -757,16 +760,16 @@ async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3
 
 async function searchBroaderLinkedInProfiles(tav, role, searchIntent, companies, needed=5) {
   const roleName = normalizeText(role);
-  const searchSentence = normalizeText(searchIntent?.search_sentence || searchIntent?.rewritten_intent || roleName);
-  const roleQuery = buildCandidateRoleQuery(roleName, searchIntent);
   const companyTerms = companies
     .slice(0, 6)
     .map(c => normalizeText(getCompanyName(c)))
     .filter(Boolean)
     .map(name => `"${name}"`)
     .join(' OR ');
+  const roleClause = buildCompactRoleOrClause(roleName, searchIntent);
+  const locationClause = buildCompactLocationClause(searchIntent);
   const queries = [
-    `${roleQuery} ${searchSentence} ${companyTerms} 个人主页 公开资料 领英 LinkedIn GitHub 知乎 脉脉 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
+    `${preferredLinkedInSite(searchIntent)} ${roleClause} ${locationClause} ${companyTerms} 个人主页 LinkedIn 领英 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
   ].map(normalizeText).filter(Boolean);
 
   const query = queries[0];
@@ -815,9 +818,10 @@ async function evaluateCandidateFit(ai, candidates, input, searchIntent) {
 1. 只根据候选人的公开资料标题、摘要、公司、链接判断；证据不足要降分，不能脑补履历。
 2. 高分候选人必须在职能方向、业务阶段、职责关键词、公司/行业背景上整体匹配。
 3. 信息不足时不要直接 reject，应给 weak/possible 并写 risk；只有明显不是人、纯技术文档、公司页、招聘页、岗位页、课程页、学生/实习生或明显无关职能才 reject。
-4. 只是网页里出现某个关键词不代表匹配，要结合 title/snippet/company/url 形成判断。
-5. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
-6. 不要新增候选人，只评估给定 index。
+4. 如果目标岗位是新兴复合岗位，只要候选人匹配成熟岗位主体（如组织发展/人才发展/HR数字化/People Analytics），但缺少明确 AI/Agent/工具构建证据，应判为 weak 或 possible，并把“AI能力待验证”写入 risk，不要因为缺少新兴能力证据直接 reject。
+5. 只是网页里出现某个关键词不代表匹配，要结合 title/snippet/company/url 形成判断。
+6. 地区偏好为中国/北京/上海时，明确海外候选人要降分或 reject；未知地区不要直接 reject，但要写 risk。
+7. 不要新增候选人，只评估给定 index。
 
 返回严格 JSON 数组，每条格式:
 [
@@ -1036,6 +1040,82 @@ function buildRoleQueryTerms(role, searchIntent) {
   ].map(normalizeText).filter(Boolean);
   const unique = [...new Set(tokens)].slice(0, 8);
   return unique.map(term => term.length > 18 ? term : `"${term}"`).join(' ');
+}
+
+function buildGeneralProfileSearchQuery(role, searchIntent) {
+  const roleClause = buildCompactRoleOrClause(role, searchIntent);
+  const locationClause = buildCompactLocationClause(searchIntent);
+  const capabilityTerms = buildCapabilityQueryTerms(searchIntent);
+  return normalizeText(`${preferredLinkedInSite(searchIntent)} ${roleClause} ${locationClause} ${capabilityTerms} 个人主页 LinkedIn 领英 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`);
+}
+
+function buildCompanyProfileSearchQuery(company, role, searchIntent) {
+  const roleClause = buildCompactRoleOrClause(role, searchIntent);
+  const locationClause = buildCompactLocationClause(searchIntent);
+  return normalizeText(`${preferredLinkedInSite(searchIntent)} "${company}" ${roleClause} ${locationClause} -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`);
+}
+
+function preferredLinkedInSite(searchIntent) {
+  return hasChinaLocationPreference(searchIntent) ? 'site:cn.linkedin.com/in' : 'site:linkedin.com/in';
+}
+
+function buildCompactRoleOrClause(role, searchIntent) {
+  const decomp = searchIntent?.role_decomposition || {};
+  const familyTerms = inferAdjacentRoleTerms(`${role} ${decomp.search_role || ''}`);
+  const tokens = unique([
+    ...familyTerms,
+    ...(decomp.role_keywords || []),
+    ...(searchIntent?.role_keywords || []),
+    ...extractSearchTokens(decomp.search_role || role),
+  ])
+    .filter(term => !isAvoidedExactRole(term, decomp))
+    .filter(isUsefulProfileRoleTerm)
+    .slice(0, 8);
+  if (!tokens.length) return `"${normalizeText(role)}"`;
+  return `(${tokens.map(term => `"${term}"`).join(' OR ')})`;
+}
+
+function inferAdjacentRoleTerms(text) {
+  const value = normalizeText(text);
+  const terms = [];
+  if (/(OD|组织发展|Organization Development|People Analytics|HR数字化|人才发展|组织效能|人力资源)/i.test(value)) {
+    terms.push('组织发展', '人才发展', 'People Analytics', 'HR数字化', '组织效能', 'HRBP');
+  }
+  if (/(GTM|增长|市场|商业化|Revenue|Growth)/i.test(value)) {
+    terms.push('GTM', '增长', '商业化', '市场', 'Revenue Growth');
+  }
+  if (/(RevOps|SalesOps|销售运营|Revenue Operations)/i.test(value)) {
+    terms.push('RevOps', 'SalesOps', '销售运营', 'Revenue Operations');
+  }
+  if (/(产品|Product|Product Manager|产品经理)/i.test(value)) {
+    terms.push('产品经理', 'Product Manager', '产品负责人');
+  }
+  return terms;
+}
+
+function isUsefulProfileRoleTerm(term) {
+  const value = normalizeText(term);
+  if (!value || value.length < 2 || value.length > 36) return false;
+  if (/[。；;：:]/.test(value)) return false;
+  if (/候选人|公开资料|个人主页|招聘|岗位|职位|JD|职责|要求|寻找|方向|具备|能力|工具构建|应用落地|AI Builder/i.test(value)) return false;
+  return true;
+}
+
+function buildCompactLocationClause(searchIntent) {
+  const terms = (searchIntent?.location_terms || [])
+    .filter(term => /北京|Beijing|上海|Shanghai|深圳|Shenzhen|杭州|Hangzhou|中国|China/i.test(term))
+    .slice(0, 4);
+  if (!terms.length) return '';
+  return `(${terms.map(term => `"${term}"`).join(' OR ')})`;
+}
+
+function buildCapabilityQueryTerms(searchIntent) {
+  const terms = unique(searchIntent?.capability_keywords || searchIntent?.role_decomposition?.capability_keywords || [])
+    .filter(term => /AI|Agent|智能体|大模型|LLM|数字化|数据|Analytics/i.test(term))
+    .filter(term => normalizeText(term).length <= 24)
+    .slice(0, 4);
+  if (!terms.length) return '';
+  return `(${terms.map(term => `"${term}"`).join(' OR ')})`;
 }
 
 function buildCandidateRoleQuery(role, searchIntent) {
