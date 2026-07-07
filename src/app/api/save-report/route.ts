@@ -1,4 +1,4 @@
-const OLD_API = "https://talent-miner.vercel.app";
+const OLD_API = "https://talent-mapping-hazel.vercel.app";
 
 export async function POST(request: Request) {
   const body = await request.text();

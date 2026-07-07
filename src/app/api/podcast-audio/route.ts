@@ -1,4 +1,4 @@
-const OLD_API = "https://talent-miner.vercel.app";
+const OLD_API = "https://talent-mapping-hazel.vercel.app";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
