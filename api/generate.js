@@ -636,6 +636,47 @@ function buildBroaderJDSearchQuery(role, searchIntent, companies) {
   return normalizeText(`${siteScope} ${roleTerms} ${locationTerms} 招聘 岗位职责 任职要求 -文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course`);
 }
 
+function buildPlatformJDSearchQueries(role, searchIntent) {
+  const roleTerms = buildSimpleJDRoleTerms(role, searchIntent).slice(0, 2);
+  const locationTerms = buildSimpleJDLocationTerms(searchIntent).slice(0, 1);
+  const roleTerm = roleTerms[0] || normalizeText(role);
+  const secondRoleTerm = roleTerms[1] || '';
+  const locationTerm = locationTerms[0] || '';
+  const base = normalizeText(`${roleTerm} ${secondRoleTerm} ${locationTerm} 招聘 岗位职责 任职要求`);
+  const negative = '-文档 -指南 -教程 -报告 -PDF -docs -documentation -guide -course -培训';
+  if (hasChinaLocationPreference(searchIntent)) {
+    return [
+      `site:liepin.com/job ${base} ${negative}`,
+      `site:zhipin.com/web/geek/job ${base} ${negative}`,
+      `site:lagou.com ${base} ${negative}`,
+      `site:zhaopin.com ${base} ${negative}`,
+      `site:51job.com ${base} ${negative}`,
+      `site:jobs.bytedance.com ${base} 社招 ${negative}`,
+      `site:careers.tencent.com ${base} 社招 ${negative}`,
+      `site:talent.alibaba.com ${base} 社招 ${negative}`,
+    ].map(normalizeText);
+  }
+  return [
+    `${base} job description responsibilities requirements ${negative}`,
+    `site:linkedin.com/jobs ${base} ${negative}`,
+    `site:greenhouse.io ${base} ${negative}`,
+    `site:lever.co ${base} ${negative}`,
+  ].map(normalizeText);
+}
+
+function buildMaimaiProfileSearchQuery(role, searchIntent, companies = []) {
+  const roleClause = buildCompactRoleOrClause(role, searchIntent);
+  const locationClause = buildCompactLocationClause(searchIntent);
+  const capabilityTerms = buildCapabilityQueryTerms(searchIntent);
+  const companyTerms = companies
+    .slice(0, 4)
+    .map(c => normalizeText(getCompanyName(c)))
+    .filter(Boolean)
+    .map(name => `"${name}"`)
+    .join(' OR ');
+  return normalizeText(`site:maimai.cn ${roleClause} ${locationClause} ${capabilityTerms} ${companyTerms} 脉脉 个人主页 职业经历 联系方式 -招聘 -职位 -岗位 -公司 -文档 -课程 -报告`);
+}
+
 function buildJDIndustryTerms(searchIntent) {
   const text = normalizeText(`${searchIntent?.search_sentence || ''} ${searchIntent?.rewritten_intent || ''}`);
   const terms = [];
@@ -761,23 +802,32 @@ ${domesticInstruction}
 
 async function searchJDs(tav, companies, role, searchIntent) {
   const jds = [];
-  const generalQuery = buildGeneralJDSearchQuery(role, searchIntent);
-  const generalResults = await tav.search(generalQuery, 8);
-  filterJDResults(generalResults, '', role, searchIntent)
-    .forEach(r => jds.push({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: generalQuery}));
-  for (const c of companies.slice(0,4)) {
+  for (const query of buildPlatformJDSearchQueries(role, searchIntent).slice(0, 4)) {
+    const results = await tav.search(query, 4);
+    filterJDResults(results, '', role, searchIntent, query)
+      .forEach(r => jds.push({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: query, source_strategy:'platform_job_board'}));
+    if (rankJDResults(dedupeByUrl(jds), role, searchIntent).length >= 6) break;
+  }
+  if (rankJDResults(dedupeByUrl(jds), role, searchIntent).length < 6) {
+    const generalQuery = buildGeneralJDSearchQuery(role, searchIntent);
+    const generalResults = await tav.search(generalQuery, 6);
+    filterJDResults(generalResults, '', role, searchIntent, generalQuery)
+      .forEach(r => jds.push({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: generalQuery, source_strategy:'general_job_search'}));
+  }
+  for (const c of companies.slice(0,3)) {
+    if (rankJDResults(dedupeByUrl(jds), role, searchIntent).length >= 6) break;
     const companyName = normalizeText(getCompanyName(c));
     const query = buildCompanyJDSearchQuery(companyName, role, searchIntent);
     const results = await tav.search(query, 2);
-    filterJDResults(results, companyName, role, searchIntent)
-      .forEach(r => jds.push({...r, company:companyName, source_type:'job_posting', search_query: query}));
+    filterJDResults(results, companyName, role, searchIntent, query)
+      .forEach(r => jds.push({...r, company:companyName, source_type:'job_posting', search_query: query, source_strategy:'target_company_job_search'}));
   }
   let ranked = rankJDResults(dedupeByUrl(jds), role, searchIntent);
   if (ranked.length < 6) {
     const supplementalQuery = buildBroaderJDSearchQuery(role, searchIntent, companies);
     const supplemental = await tav.search(supplementalQuery, 8);
-    const filtered = filterJDResults(supplemental, '', role, searchIntent)
-      .map(r => ({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: supplementalQuery}));
+    const filtered = filterJDResults(supplemental, '', role, searchIntent, supplementalQuery)
+      .map(r => ({...r, company: extractCompanyFromTitle(r.title) || '', source_type:'job_posting', search_query: supplementalQuery, source_strategy:'broader_job_search'}));
     ranked = rankJDResults(dedupeByUrl([...ranked, ...filtered]), role, searchIntent);
   }
   return ranked.slice(0,12);
@@ -810,7 +860,8 @@ async function searchLinkedIn(tav, companies, role, searchIntent) {
 async function searchCandidateProfilesFirstRound(tav, companies, role, searchIntent) {
   const searches = [
     searchGeneralCandidateProfiles(tav, role, 8, searchIntent),
-    ...companies.slice(0,4).map(c => searchLinkedInProfilesForCompany(tav, c.name, role, 3, searchIntent))
+    ...companies.slice(0,4).map(c => searchLinkedInProfilesForCompany(tav, c.name, role, 3, searchIntent)),
+    ...(hasChinaLocationPreference(searchIntent) ? [searchMaimaiCandidateProfiles(tav, role, companies, 6, searchIntent)] : [])
   ];
   return Promise.all(searches);
 }
@@ -841,6 +892,20 @@ async function searchLinkedInProfilesForCompany(tav, company, role, maxResults=3
   return rankProfileResults(dedupeByProfileUrl(collected), roleName, searchIntent).slice(0, maxResults);
 }
 
+async function searchMaimaiCandidateProfiles(tav, role, companies, maxResults=6, searchIntent) {
+  const roleName = normalizeText(role);
+  const query = buildMaimaiProfileSearchQuery(roleName, searchIntent, companies);
+  if (!query) return [];
+  const results = await tav.search(query, maxResults);
+  return filterLinkedInProfileResults(results, '', roleName, searchIntent)
+    .map(r => ({
+      ...r,
+      company: extractCompanyFromTitle(r.title) || '',
+      search_query: query,
+      source_strategy: 'maimai_profile_search',
+    }));
+}
+
 async function searchBroaderLinkedInProfiles(tav, role, searchIntent, companies, needed=5) {
   const roleName = normalizeText(role);
   const companyTerms = companies
@@ -852,13 +917,17 @@ async function searchBroaderLinkedInProfiles(tav, role, searchIntent, companies,
   const roleClause = buildCompactRoleOrClause(roleName, searchIntent);
   const locationClause = buildCompactLocationClause(searchIntent);
   const queries = [
-    `${preferredLinkedInSite(searchIntent)} ${roleClause} ${locationClause} ${companyTerms} 个人主页 LinkedIn 领英 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`
+    `${preferredLinkedInSite(searchIntent)} ${roleClause} ${locationClause} ${companyTerms} 个人主页 LinkedIn 领英 -jobs -careers -hiring -docs -documentation -developers -api -guide -help -product`,
+    ...(hasChinaLocationPreference(searchIntent) ? [buildMaimaiProfileSearchQuery(roleName, searchIntent, companies)] : [])
   ].map(normalizeText).filter(Boolean);
 
-  const query = queries[0];
-  const results = query ? await tav.search(query, Math.max(needed, 6)) : [];
-  const collected = filterLinkedInProfileResults(results, '', roleName, searchIntent)
-    .map(r => ({...r, company: extractCompanyFromTitle(r.title) || '', search_query: query}));
+  const collected = [];
+  for (const query of queries.slice(0, 2)) {
+    const results = query ? await tav.search(query, Math.max(needed, 6)) : [];
+    filterLinkedInProfileResults(results, '', roleName, searchIntent)
+      .forEach(r => collected.push({...r, company: extractCompanyFromTitle(r.title) || '', search_query: query, source_strategy: query.includes('maimai.cn') ? 'maimai_profile_search' : 'broader_profile_search'}));
+    if (dedupeByProfileUrl(collected).length >= Math.max(needed, 5)) break;
+  }
   return rankProfileResults(dedupeByProfileUrl(collected), roleName, searchIntent).slice(0, Math.max(needed, 5));
 }
 
@@ -1555,7 +1624,7 @@ function rankProfileResults(results, role, searchIntent) {
     .sort((a, b) => b.match_score - a.match_score);
 }
 
-function filterJDResults(results, company, role, searchIntent) {
+function filterJDResults(results, company, role, searchIntent, searchQuery = '') {
   return results.filter(result => {
     if (!isJobPostingSource(result)) return false;
     if (looksLikeNonJDResult(result)) return false;
@@ -1563,7 +1632,11 @@ function filterJDResults(results, company, role, searchIntent) {
     if (!passesJDLocationConstraint(result, searchIntent)) return false;
     const text = normalizeText(`${result?.title || ''} ${result?.snippet || ''} ${result?.url || ''}`);
     const hasCompany = company && includesLoose(text, company);
-    const hasRole = getJDRoleTokens(role, searchIntent).some(token => includesLoose(text, token));
+    const queryText = normalizeText(searchQuery);
+    const roleTokens = getJDRoleTokens(role, searchIntent);
+    const hasRoleInResult = roleTokens.some(token => includesLoose(text, token));
+    const hasRoleFromQuery = roleTokens.some(token => includesLoose(queryText, token));
+    const hasRole = hasRoleInResult || (isKnownJobBoardUrl(result) && hasRoleFromQuery);
     if (!hasRole) return false;
     return hasSpecificJobDetailSignal(result) || (hasCompany && isOfficialJobBoardUrl(result));
   });
@@ -1618,6 +1691,7 @@ function scoreProfileResult(result, role, searchIntent) {
   let score = 100;
   if (isLinkedInProfileUrl(result)) score += 20;
   else if (isPublicPersonProfileUrl(result)) score += 12;
+  if (hasChinaLocationPreference(searchIntent) && detectPlatform(result?.url || '') === 'maimai') score += 18;
   if (company && text.includes(company)) score += 24;
   if (roleText && text.includes(roleText)) score += 30;
   for (const token of (searchIntent?.role_keywords || [])) {
